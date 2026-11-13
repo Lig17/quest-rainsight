@@ -112,3 +112,16 @@ session JSONL. The transcript must remain untouched.
   preview tier; they sleep after 15 minutes idle, lose local filesystem changes
   on sleep/restart, and receive 750 instance hours per workspace/month. Durable
   hosting still requires the user's provider login and plan choice.
+
+## 2026-11-13 follow-up — interval clock labels
+
+- Final interface review found a presentation defect: interval values were
+  formatted in Asia/Kolkata but labeled UTC. Corrected all interval/map/timeline
+  labels to IST with local calendar dates, while the initialization remains UTC.
+  Chennai is now the initial selected city so the independently cross-checked
+  nonzero forecast is visible immediately.
+- Rebuilt `rainsight:0.3.2`; fresh-container checks confirmed the Chennai value,
+  Chennai default, IST labels, and date labels. Replaced the public tunnel's
+  container and rechecked its HTTPS URL: all 10 page, API, and asset GET routes
+  returned 200; the page is still serving run `20261112T1800Z` and health reports
+  `stale=false` at verification time.

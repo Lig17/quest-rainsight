@@ -1,8 +1,10 @@
 const $ = (selector) => document.querySelector(selector);
-const state = {runId:null, locations:[], cityId:'bengaluru', compareA:'bengaluru', compareB:'chennai', threshold:10, selectedStep:null, timeline:null, city:null, map:null, layer:null};
+const state = {runId:null, locations:[], cityId:'chennai', compareA:'bengaluru', compareB:'chennai', threshold:10, selectedStep:null, timeline:null, city:null, map:null, layer:null};
 const number = (value, digits=1) => Number(value).toLocaleString('en-IN',{maximumFractionDigits:digits,minimumFractionDigits:0});
 const dateTime = (iso, options={}) => new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:false,...options}).format(new Date(iso));
 const fullDate = (iso) => new Intl.DateTimeFormat('en-IN',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso))+' UTC';
+const localDay = (iso) => new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short'}).format(new Date(iso));
+const localDateTime = (iso) => `${localDay(iso)}, ${dateTime(iso)}`;
 async function api(path){const response=await fetch(path,{headers:{Accept:'application/json'}});if(!response.ok){const body=await response.json().catch(()=>({detail:'Forecast service unavailable'}));throw new Error(body.detail||`Request failed (${response.status})`)}return response.json()}
 function setFreshness(freshness){const dot=$('.status-dot'),chip=$('#run-chip-text');if(freshness.stale){dot.className='status-dot stale';chip.textContent='Stored run · stale';$('#freshness-label').textContent=`Last processed ${number(freshness.cache_age_hours,0)} h ago · run may be stale`}else{dot.className='status-dot';chip.textContent='Forecast data available';$('#freshness-label').textContent=`Processed ${number(freshness.cache_age_hours,0)} h ago · run age ${number(freshness.run_age_hours,0)} h`}}
 function showError(message){const toast=$('#toast');toast.textContent=message;toast.classList.add('show');clearTimeout(showError.timer);showError.timer=setTimeout(()=>toast.classList.remove('show'),3800)}
@@ -11,13 +13,50 @@ function initMap(){if(!window.L){$('#map-loading').textContent='Map library did 
 function addSelectOptions(select, selected){select.innerHTML=state.locations.map(location=>`<option value="${location.id}">${location.name}</option>`).join('');select.value=selected}
 function currentCity(){return state.locations.find(x=>x.id===state.cityId)}
 function currentCityInterval(){return state.city?.intervals.find(x=>x.end_step===state.selectedStep)}
-function renderTimeline(){if(!state.timeline)return;const citySeries=state.city?.intervals||[];$('#timeline').innerHTML=state.timeline.intervals.map(interval=>{const local=dateTime(interval.end_time), start=dateTime(interval.start_time);const loc=citySeries.find(x=>x.end_step===interval.end_step);const crossed=loc?loc.threshold_crossed:interval.threshold_crossed_somewhere;return `<button type="button" role="listitem" class="time-slot ${interval.end_step===state.selectedStep?'selected':''} ${crossed?'crossed':''}" data-step="${interval.end_step}" aria-pressed="${interval.end_step===state.selectedStep}" aria-label="${start} to ${local} UTC, ${loc?.rainfall_mm??'map'} millimetres${crossed?', threshold reached':''}"><span class="time-time">${start}–${local}</span><span class="time-amount">${loc?number(loc.rainfall_mm):number(interval.max_grid_mm)} <small>${loc?'mm':'max mm'}</small></span></button>`}).join('');$('#timeline').querySelectorAll('.time-slot').forEach(button=>button.addEventListener('click',()=>selectStep(Number(button.dataset.step))))}
-function renderCity(){const city=currentCity(), interval=currentCityInterval();if(!city||!interval)return;$('#city-amount').textContent=number(interval.rainfall_mm,2);$('#selected-interval-label').textContent=`${dateTime(interval.start_time)}–${dateTime(interval.end_time)} UTC · ${city.name.toUpperCase()}`;$('#city-cumulative').textContent=`${number(interval.cumulative_mm,2)} mm across ${state.timeline.intervals.length*3} forecast hours`;$('#overview-city-value').textContent=`${number(interval.rainfall_mm,2)} mm`;$('#overview-city-foot').textContent=`${city.name} · ${dateTime(interval.start_time)}–${dateTime(interval.end_time)} UTC`;$('#threshold-value').textContent=state.threshold;$('#threshold-slider').value=state.threshold;$('#threshold-copy').textContent=interval.threshold_crossed?`This interval meets your ${state.threshold} mm threshold at ${city.name}. A model estimate, not an official warning.`:`This interval is below your ${state.threshold} mm threshold at ${city.name}.`}
+function renderTimeline(){
+  if(!state.timeline)return;
+  const citySeries=state.city?.intervals||[];
+  $('#timeline').innerHTML=state.timeline.intervals.map(interval=>{
+    const start=dateTime(interval.start_time), end=dateTime(interval.end_time);
+    const startDay=localDay(interval.start_time), endDay=localDay(interval.end_time);
+    const cityInterval=citySeries.find(x=>x.end_step===interval.end_step);
+    const crossed=cityInterval?cityInterval.threshold_crossed:interval.threshold_crossed_somewhere;
+    return `<button type="button" role="listitem" class="time-slot ${interval.end_step===state.selectedStep?'selected':''} ${crossed?'crossed':''}" data-step="${interval.end_step}" aria-pressed="${interval.end_step===state.selectedStep}" aria-label="${localDateTime(interval.start_time)} to ${localDateTime(interval.end_time)} IST, ${cityInterval?.rainfall_mm??'map'} millimetres${crossed?', threshold reached':''}"><span class="time-time">${start}–${end}</span><span class="time-day">${startDay}${startDay===endDay?'':` → ${endDay}`} · IST</span><span class="time-amount">${cityInterval?number(cityInterval.rainfall_mm):number(interval.max_grid_mm)} <small>${cityInterval?'mm':'max mm'}</small></span></button>`;
+  }).join('');
+  $('#timeline').querySelectorAll('.time-slot').forEach(button=>button.addEventListener('click',()=>selectStep(Number(button.dataset.step))));
+}
+function renderCity(){
+  const city=currentCity(), interval=currentCityInterval();
+  if(!city||!interval)return;
+  $('#city-amount').textContent=number(interval.rainfall_mm,2);
+  $('#selected-interval-label').textContent=`${localDateTime(interval.start_time)}–${localDateTime(interval.end_time)} IST · ${city.name.toUpperCase()}`;
+  $('#city-cumulative').textContent=`${number(interval.cumulative_mm,2)} mm across ${state.timeline.intervals.length*3} forecast hours`;
+  $('#overview-city-value').textContent=`${number(interval.rainfall_mm,2)} mm`;
+  $('#overview-city-foot').textContent=`${city.name} · ${localDateTime(interval.start_time)}–${localDateTime(interval.end_time)} IST`;
+  $('#threshold-value').textContent=state.threshold;
+  $('#threshold-slider').value=state.threshold;
+  $('#threshold-copy').textContent=interval.threshold_crossed?`This interval meets your ${state.threshold} mm threshold at ${city.name}. A model estimate, not an official warning.`:`This interval is below your ${state.threshold} mm threshold at ${city.name}.`;
+}
 function renderRunDetail(provenance){$('#run-detail').innerHTML=`${provenance.model}<br>${provenance.resolution_degrees}° grid · ${provenance.grib_metadata.length} tp fields<br>Run ${provenance.run_id}<br>${provenance.grib_sha256.slice(0,16)}…`}
-function renderMap(features){if(!state.map||!state.layer)return;state.layer.clearLayers();for(const feature of features){const [lon,lat]=feature.geometry.coordinates;const mm=feature.properties.rainfall_mm;const marker=L.circleMarker([lat,lon],{radius:5,weight:.7,color:'#fff',fillColor:rainfallColor(mm),fillOpacity:.84,className:'rain-dot'});marker.bindPopup(`<b>${number(mm,2)} mm</b><br>Interval rainfall<br><span>${dateTime($('#map-interval-title').dataset.start)}–${dateTime($('#map-interval-title').dataset.end)} UTC</span>`);state.layer.addLayer(marker)}}
+function renderMap(features){
+  if(!state.map||!state.layer)return;
+  state.layer.clearLayers();
+  for(const feature of features){
+    const [lon,lat]=feature.geometry.coordinates, mm=feature.properties.rainfall_mm;
+    const marker=L.circleMarker([lat,lon],{radius:5,weight:.7,color:'#fff',fillColor:rainfallColor(mm),fillOpacity:.84,className:'rain-dot'});
+    const title=$('#map-interval-title');
+    marker.bindPopup(`<b>${number(mm,2)} mm</b><br>Interval rainfall<br><span>${localDateTime(title.dataset.start)}–${localDateTime(title.dataset.end)} IST</span>`);
+    state.layer.addLayer(marker);
+  }
+}
 async function loadCity(){state.city=await api(`/api/location/${state.cityId}?threshold_mm=${state.threshold}`);setFreshness(state.city.freshness);renderCity();renderTimeline()}
 async function loadTimeline(){state.timeline=await api(`/api/timeline?threshold_mm=${state.threshold}`);if(state.selectedStep==null||!state.timeline.intervals.some(x=>x.end_step===state.selectedStep))state.selectedStep=state.timeline.intervals[0].end_step;$('#stat-horizon').textContent=`${state.timeline.intervals.length*3} h`;$('#run-init').textContent=fullDate(state.timeline.initialization);setFreshness(state.timeline.freshness);renderTimeline()}
-async function loadSpatial(){const data=await api(`/api/spatial?end_step=${state.selectedStep}`);const interval=$('#map-interval-title');interval.dataset.start=data.start_time;interval.dataset.end=data.end_time;interval.textContent=`${dateTime(data.start_time)}–${dateTime(data.end_time)} UTC`;renderMap(data.features)}
+async function loadSpatial(){
+  const data=await api(`/api/spatial?end_step=${state.selectedStep}`), interval=$('#map-interval-title');
+  interval.dataset.start=data.start_time; interval.dataset.end=data.end_time;
+  interval.textContent=`${localDateTime(data.start_time)}–${localDateTime(data.end_time)} IST`;
+  renderMap(data.features);
+}
 async function selectStep(step){state.selectedStep=step;renderTimeline();try{await Promise.all([loadCity(),loadSpatial()])}catch(error){showError(error.message)}}
 async function setCity(cityId){state.cityId=cityId;try{await loadCity()}catch(error){showError(error.message)}}
 async function loadProvenance(){const data=await api('/api/provenance');renderRunDetail(data);$('#provenance-json').textContent=JSON.stringify(data,null,2)}
