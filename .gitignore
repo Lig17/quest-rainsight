@@ -7,5 +7,6 @@ __pycache__/
 .env.*
 data/*
 !data/.gitkeep
+!data/20261112T1800Z.json
 *.grib*
 *.jsonl

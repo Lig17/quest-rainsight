@@ -8,3 +8,4 @@ scripts
 docs
 .env*
 data/*.grib*
+data/latest.json

@@ -90,3 +90,25 @@ session JSONL. The transcript must remain untouched.
 - Deployment CLI checks found no authenticated cloud hosting or registry account.
   Docker Engine 28.3.3 and `cloudflared` are available. Durable public deployment
   still needs an account/authorization step. No public URL has been verified.
+
+## 2026-11-13 follow-up — clean image and public verification
+
+- Added the verified processed run JSON as a small initial application snapshot and
+  a fallback when `latest.json` does not yet exist. Raw GRIB remains ignored. This
+  makes Docker build from a fresh source checkout viable while the background
+  refresh attempts a newer run.
+- Added a unit case for snapshot fallback. Final suite now reports 16 passing
+  tests; JS syntax and Python compile checks pass.
+- Rebuilt `rainsight:0.3.1` with the fully pinned `requirements.lock`. Confirmed
+  the image contains the single committed run snapshot and no `latest.json`.
+  Container health and Chennai's 0.183 mm field pass using this fallback.
+- Exposed the running application through an account-free Cloudflare Quick
+  Tunnel. From the public HTTPS URL, GET requests to `/`, health, runs, locations,
+  timeline, Chennai, spatial GeoJSON, and provenance all returned HTTP 200. Public
+  checks confirmed the real run, 0.183 mm Chennai value, and 3,969 map cells.
+  The tunnel is currently tied to this host process and has no uptime guarantee.
+- Cloud hosting and registry logins are absent in this environment. Render is a
+  viable Docker host, but its own documentation describes Free services as a
+  preview tier; they sleep after 15 minutes idle, lose local filesystem changes
+  on sleep/restart, and receive 750 instance hours per workspace/month. Durable
+  hosting still requires the user's provider login and plan choice.

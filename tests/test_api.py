@@ -47,6 +47,12 @@ class ApiTests(unittest.TestCase):
         self.assertIn("stale", response.json()["freshness"])
         self.assertEqual(self.client.get("/api/runs").json()["runs"][0]["run_id"], "20261112T1800Z")
 
+    def test_latest_falls_back_to_processed_run_snapshot(self):
+        (api.DATA / "latest.json").unlink()
+        result = self.client.get("/api/location/test-city").json()
+        self.assertEqual(result["run_id"], "20261112T1800Z")
+        self.assertEqual(result["intervals"][0]["rainfall_mm"], 1.0)
+
     def test_locations_timeline_and_threshold(self):
         self.assertEqual(self.client.get("/api/locations").json()["locations"][0]["id"], "test-city")
         result = self.client.get("/api/timeline?threshold_mm=10").json()

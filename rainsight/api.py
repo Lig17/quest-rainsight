@@ -56,7 +56,13 @@ app.mount("/static", StaticFiles(directory=WEB), name="static")
 
 
 def load_forecast(run_id: Optional[str] = None) -> dict:
-    path = DATA / "latest.json" if run_id is None else DATA / f"{run_id}.json"
+    if run_id is None:
+        path = DATA / "latest.json"
+        if not path.exists():
+            snapshots = sorted(p for p in DATA.glob("*.json") if p.name != "latest.json")
+            path = snapshots[-1] if snapshots else path
+    else:
+        path = DATA / f"{run_id}.json"
     if run_id is not None and ("/" in run_id or "\\" in run_id or run_id in (".", "..")):
         raise HTTPException(400, "Invalid run identifier")
     try:
