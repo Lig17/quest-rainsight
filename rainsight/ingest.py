@@ -35,6 +35,9 @@ def decode(path: Path):
             "stepUnits", "dataDate", "dataTime", "validityDate", "validityTime",
             "typeOfLevel", "gridType", "Ni", "Nj", "numberOfMissing",
             "edition", "centre", "generatingProcessIdentifier"]
+    keys += ["packingType", "bitsPerValue", "binaryScaleFactor", "decimalScaleFactor",
+             "referenceValue", "stepRange", "typeOfStatisticalProcessing",
+             "lengthOfTimeRange", "indicatorOfUnitForTimeRange"]
     with path.open("rb") as source:
         while (handle := ec.codes_grib_new_from_file(source)) is not None:
             try:
@@ -46,6 +49,11 @@ def decode(path: Path):
                 lats = ec.codes_get_array(handle, "latitudes")
                 lons = ec.codes_get_array(handle, "longitudes")
                 values = ec.codes_get_values(handle)
+                # GRIB binary/decimal scaling defines the decoded value quantum.
+                # Half a quantum bounds rounding error per independently packed
+                # cumulative field; interval error is the sum of both bounds.
+                quantum_mm = (2.0 ** int(meta["binaryScaleFactor"]) *
+                              10.0 ** (-int(meta["decimalScaleFactor"])) * 1000.0)
                 mask = ((lats >= BOUNDS['south']) & (lats <= BOUNDS['north']) &
                         (lons >= BOUNDS['west']) & (lons <= BOUNDS['east']))
                 if not np.any(mask):
@@ -57,7 +65,10 @@ def decode(path: Path):
                     timestamp(meta['validityDate'], meta['validityTime']),
                     int(meta['startStep']), int(meta['endStep']), meta['units'],
                     tuple(lats[mask].tolist()), tuple(lons[mask].tolist()),
-                    tuple(values[mask].tolist()), meta['shortName'], meta['stepType']))
+                    tuple(values[mask].tolist()), meta['shortName'], meta['stepType'],
+                    quantum_mm / 2.0))
+                meta["decoded_quantum_mm"] = quantum_mm
+                meta["half_quantum_error_bound_mm"] = quantum_mm / 2.0
                 metadata.append(meta)
             finally:
                 ec.codes_release(handle)
@@ -110,16 +121,28 @@ def main():
     # Independent decoded-GRIB cross-check for a displayed city, without using
     # interval_rainfall's output as the expected value.
     sorted_fields = sorted(fields, key=lambda f: f.end_step)
-    city = locations[0]
+    city = None
+    interval_index = None
+    for candidate_interval, interval in enumerate(processed['intervals']):
+        for candidate_city in locations:
+            if interval['rainfall_mm'][candidate_city['grid_index']] > 0:
+                city, interval_index = candidate_city, candidate_interval
+                break
+        if city:
+            break
+    if city is None:
+        raise ValueError("No nonzero city value available for an independent GRIB cross-check")
     index = city['grid_index']
-    before, after = sorted_fields[:2]
+    after = sorted_fields[interval_index]
+    before_value = 0.0 if interval_index == 0 else sorted_fields[interval_index - 1].values[index]
+    before_unit = after.units if interval_index == 0 else sorted_fields[interval_index - 1].units
     expected = max(0.0, after.values[index] * (1000 if after.units == 'm' else 1)
-                   - before.values[index] * (1000 if before.units == 'm' else 1))
-    actual = processed['intervals'][1]['rainfall_mm'][index]
+                   - before_value * (1000 if before_unit == 'm' else 1))
+    actual = processed['intervals'][interval_index]['rainfall_mm'][index]
     if abs(actual - expected) > 1e-9:
         raise ValueError("Decoded GRIB cross-check failed")
-    check = dict(location=city['id'], grid_index=index, start_step=before.end_step,
-                 end_step=after.end_step, decoded_before=before.values[index],
+    check = dict(location=city['id'], grid_index=index, start_step=processed['intervals'][interval_index]['start_step'],
+                 end_step=after.end_step, decoded_before=before_value,
                  decoded_after=after.values[index], source_units=after.units,
                  expected_interval_mm=expected, displayed_interval_mm=actual)
     with raw_path.open('rb') as raw:

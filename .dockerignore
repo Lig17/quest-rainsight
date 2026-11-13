@@ -1,0 +1,10 @@
+.rainsight-git
+.git
+.venv
+__pycache__
+*.pyc
+tests
+scripts
+docs
+.env*
+data/*.grib*

@@ -16,6 +16,7 @@ class Field:
     values: tuple[float, ...]
     short_name: str = "tp"
     step_type: str = "accum"
+    quantization_error_mm: float = 0.0
 
 
 def validate(field: Field) -> None:
@@ -31,6 +32,8 @@ def validate(field: Field) -> None:
         raise ValueError("Valid time does not match initialization plus end step")
     if field.short_name != "tp" or field.step_type != "accum":
         raise ValueError("Expected accumulated total precipitation")
+    if not isfinite(field.quantization_error_mm) or field.quantization_error_mm < 0:
+        raise ValueError("Invalid GRIB packing uncertainty")
     if field.units not in ("m", "mm", "kg m**-2"):
         raise ValueError(f"Unsupported precipitation units: {field.units}")
     if not field.values or not (len(field.values) == len(field.latitudes) == len(field.longitudes)):
@@ -62,6 +65,7 @@ def interval_rainfall(fields: list[Field], cadence_hours: int = 3,
     previous_step = 0
     intervals = []
     clipped = 0
+    previous_quantization_error = 0.0
     for field in ordered:
         if (field.initialization != first.initialization or
             field.latitudes != first.latitudes or field.longitudes != first.longitudes):
@@ -74,17 +78,24 @@ def interval_rainfall(fields: list[Field], cadence_hours: int = 3,
             raise ValueError("Substantial negative accumulated precipitation")
         cumulative = [max(0.0, x) for x in cumulative]
         differences = [now - before for now, before in zip(cumulative, previous)]
-        if min(differences) < -negative_tolerance_mm:
+        # CCSDS/simple packing quantizes each cumulative field independently.
+        # A difference can therefore be negative by up to the sum of the two
+        # fields' half-quantum bounds without representing negative rainfall.
+        interval_tolerance = max(negative_tolerance_mm,
+                                 previous_quantization_error + field.quantization_error_mm)
+        if min(differences) < -interval_tolerance:
             raise ValueError("Substantial negative interval: possible reset or inconsistent fields")
         clipped += sum(x < 0 for x in differences)
         intervals.append({
             "start_step": previous_step, "end_step": field.end_step,
             "start_time": (field.initialization + timedelta(hours=previous_step)).isoformat(),
             "end_time": field.valid_time.isoformat(),
+            "rounding_tolerance_mm": interval_tolerance,
             "rainfall_mm": [max(0.0, x) for x in differences],
         })
         previous = cumulative
         previous_step = field.end_step
+        previous_quantization_error = field.quantization_error_mm
     return {"initialization": first.initialization.isoformat(), "units": "mm",
             "latitudes": list(first.latitudes), "longitudes": list(first.longitudes),
             "intervals": intervals, "clipped_negative_differences": clipped,

@@ -53,6 +53,13 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(result['clipped_negative_differences'], 1)
         self.assertEqual(result['intervals'][1]['rainfall_mm'][0], 0)
 
+    def test_grib_quantization_rounding_bound(self):
+        first = field(3, (0.00262451171875, 0.002532958984375), quantization_error_mm=0.0152587890625)
+        second = field(6, (0.002593994140625, 0.002685546875), quantization_error_mm=0.030517578125)
+        result = interval_rainfall([first, second])
+        self.assertEqual(result['intervals'][1]['rainfall_mm'][0], 0)
+        self.assertAlmostEqual(result['intervals'][1]['rounding_tolerance_mm'], 0.0457763671875)
+
     def test_known_city_arrays(self):
         lats, lons = [12, 13, 14], [77, 77.5, 78]
         index = nearest_index(lats, lons, 12.9716, 77.5946)

@@ -1,62 +1,97 @@
 # RainSight
 
-Work in progress for the QUEST Lab precipitation forecast project. This is a real
-data application under development, not a completed deployment.
+RainSight is a small FastAPI application for exploring real ECMWF deterministic
+precipitation forecasts over India. It shows the model run and data freshness,
+three-hour interval amounts, a map, city comparisons, and processing provenance.
 
-## Current verified state
+## Verified data
 
-Terminal execution works. Nine offline scientific test methods pass. No real
-forecast has yet been retrieved: the agent environment cannot resolve PyPI,
-ECMWF, or its AWS mirror. GRIB decoding and cross-check code remain unexecuted.
-There is no public deployment yet.
+The local cache contains 16 real IFS fields for run 2026-11-12 18 UTC, forecast
+steps 3–48 hours, retrieved from ECMWF Open Data. ecCodes confirmed total
+precipitation (paramId 228), surface level, accumulated from startStep 0,
+matching valid times, units metres, no missing values, and a regular 1440×721
+lat-lon grid. The India crop contains 15,625 points.
 
-## Setup and ingestion
+An independent nonzero city cross-check uses Chennai: step 3 decoded
+0.00018310546875 m, or 0.18310546875 mm, matching the processed first interval
+exactly. The first field covers 0–3 h; later cumulative fields are differenced to
+obtain consecutive three-hour amounts.
+
+Direct dependency versions are pinned in `requirements.txt`; the complete
+resolved environment from the successful install is captured in `requirements.lock`.
+Ingestion discovers a run at the final requested step, pins every field to that initialization, selects
+only `tp`, and crops to 6–37°N, 67–98°E after decoding. Open Data selection does
+not perform server-side geographic cropping. Raw GRIB and cache JSON are ignored
+by Git.
+
+The converter requires GRIB `tp`/228, surface level, accumulated fields from
+startStep zero, matching valid times and grids, and complete three-hour cadence.
+Each interval is the difference between successive cumulative fields, converted
+from metres to millimetres. It rejects gaps, malformed/nonfinite values, and
+substantial negative differences. Real CCSDS-packed cumulative fields can decode
+to small negative differences. The allowed bound is derived per interval from
+the two fields' half-quantum error (`2**binaryScaleFactor *
+10**(-decimalScaleFactor)`) converted to mm. Differences beyond that bound reject
+the run, and clipped values are counted. Cache updates happen atomically only
+after validation and an independent city-value cross-check.
+
+The deterministic forecast provides no calibrated probabilities, uncertainty
+intervals, flood risk, or official warnings. City values use the nearest 0.25°
+grid point, not a station observation. Total precipitation is water equivalent
+and includes frozen precipitation.
+
+## Run locally
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-timeout 600 .venv/bin/python -m rainsight.ingest --hours 48 --source aws
-python3 -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/uvicorn rainsight.api:app --host 127.0.0.1 --port 8000
 ```
 
-Direct dependency pins have not yet been installation-verified. The ingestion
-command needs outbound HTTPS. It discovers a run at the final requested step,
-pins the request to that initialization, selects only `tp` fields, and crops to
-6–37°N, 67–98°E after decoding. Open Data field selection is not server-side
-geographic subsetting. Raw GRIB and processed caches are ignored by Git.
+Open `http://127.0.0.1:8000`. Set `RAINSIGHT_AUTO_REFRESH=0` to disable scheduled
+downloads or `RAINSIGHT_DATA_DIR=/path/to/cache` to select another cache. While
+running, the application attempts an ECMWF refresh every six hours; a failed
+refresh preserves the last validated cache and reports its age and staleness.
+Map tiles come from OpenStreetMap.
 
-It requires GRIB `tp`/228, surface, accumulated, hourly steps, zero startStep,
-matching valid times and grids, and complete 3-hour cadence. Each interval is
-the difference between successive accumulations, converted to millimetres.
-The first accumulation spans initialization to +3h. Missing steps, resets,
-nonfinite values, and substantive negative differences reject the run. Negative
-differences up to 0.01 mm are clipped and counted; this explicit numerical
-tolerance is provisional pending real-data inspection. A city cross-check records
-the two decoded input values and the resulting displayed interval. Cache writes
-occur only after validation; failed ingestion preserves the previous cache.
+## API
 
-Nearest grid point extraction approximates a location, and amounts represent
-water-equivalent precipitation, including snow. A deterministic model does not
-provide calibrated uncertainty, probability, flood risk, or official warnings.
+- `GET /api/health`
+- `GET /api/runs`
+- `GET /api/locations`
+- `GET /api/timeline?threshold_mm=10`
+- `GET /api/location/{location_id}?threshold_mm=10`
+- `GET /api/spatial?end_step=3`
+- `GET /api/provenance`
+
+The responsive interface has an interval map, configurable threshold, location
+analysis, comparison chart, and source-field provenance. API responses include
+the run and freshness where relevant. Deterministic values are rainfall amounts,
+never probabilities or calibrated uncertainty estimates.
 
 ## Source and licence
 
 - [ECMWF Open Data](https://www.ecmwf.int/en/forecasts/datasets/open-data)
 - [Official retrieval client](https://github.com/ecmwf/ecmwf-opendata)
-- Forecast attribution: ECMWF Open Data, CC BY 4.0.
+- Attribution: ECMWF Open Data, CC BY 4.0.
 
-## Session and Git integrity
+## Deployment and session record
 
-All work occurs in the original session. No raw JSONL log is edited or generated
-by this project. `docs/DEVELOPMENT.md` is a separate chronological engineering
-record. The genuine original transcript has not yet been located.
+The Docker image includes the processed real forecast cache and refreshes it at
+runtime. Public deployment has not yet been verified. See [DEVELOPMENT.md](docs/DEVELOPMENT.md)
+for the chronological record, including corrections and actual test outcomes.
 
-The environment mounts `.git` read-only. Authentic commits currently use:
+All development was done in the original session. No raw JSONL transcript was
+modified or generated by this project. The original transcript was located at
+`/home/lighittha/.codex/sessions/2026/11/13/rollout-2026-11-13T08-58-37-01a1d2f3-376e-7081-a293-afcb412143c3.jsonl`.
+It was checked read-only for this application title and transcript-preservation
+instruction; its contents were not modified.
+
+The environment mounts `.git` read-only. Authentic commit history is in
+`.rainsight-git`, including the initial milestone commit; use:
 
 ```bash
 git --git-dir=.rainsight-git --work-tree=. status
 git --git-dir=.rainsight-git --work-tree=. log --oneline
 ```
-
-Keep `.rainsight-git` intact: it contains the real history. Once `.git` is writable,
-the metadata can be migrated without rewriting commits.

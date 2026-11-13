@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101d32">
+  <meta name="description" content="Explore transparent ECMWF precipitation forecasts for India.">
+  <title>RainSight — India precipitation outlook</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://{s}.tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#overview" aria-label="RainSight home"><span class="brand-mark">R</span><span>RainSight<span class="brand-lab"> / FIELD NOTES</span></span></a>
+    <nav class="main-nav" aria-label="Main navigation">
+      <a class="nav-link active" href="#overview">Overview</a>
+      <a class="nav-link" href="#explorer">Forecast map</a>
+      <a class="nav-link" href="#compare">Compare</a>
+      <a class="nav-link" href="#method">Data &amp; method</a>
+    </nav>
+    <div class="run-chip"><span class="status-dot"></span><span id="run-chip-text">Connecting to forecast…</span></div>
+  </header>
+
+  <main>
+    <section class="intro" id="overview">
+      <div class="eyebrow"><span class="eyebrow-line"></span> ECMWF · INDIA · DETERMINISTIC OUTLOOK</div>
+      <div class="intro-row">
+        <div><h1>Read the rain<br><em>between the lines.</em></h1>
+          <p class="lede">A clear view of expected precipitation across India, with the forecast interval and its source always in sight.</p></div>
+        <div class="run-summary"><div class="summary-label">MODEL INITIALIZATION</div><div id="run-init" class="summary-value">Loading run</div><div class="summary-meta" id="freshness-label">Checking data freshness</div></div>
+      </div>
+    </section>
+
+    <section class="stat-grid" aria-label="Forecast overview">
+      <article class="stat-card"><div class="stat-label">MODEL</div><div class="stat-value" id="stat-model">IFS HRES</div><div class="stat-foot">Deterministic forecast · 0.25°</div></article>
+      <article class="stat-card"><div class="stat-label">COVERAGE</div><div class="stat-value">India</div><div class="stat-foot">6°–37°N · 67°–98°E</div></article>
+      <article class="stat-card"><div class="stat-label">HORIZON</div><div class="stat-value" id="stat-horizon">48 h</div><div class="stat-foot">Three-hour rainfall intervals</div></article>
+      <article class="stat-card stat-highlight"><div class="stat-label">SELECTED LOCATION</div><div class="stat-value" id="overview-city-value">— mm</div><div class="stat-foot" id="overview-city-foot">Choose a location below</div></article>
+    </section>
+
+    <section class="workspace" id="explorer">
+      <div class="section-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> FORECAST EXPLORER</div><h2>Where could rain fall?</h2></div><div class="unit-note">Amounts show rainfall <b>within the selected interval</b> · mm</div></div>
+      <div class="explorer-grid">
+        <div class="map-panel">
+          <div class="map-topline"><div><span class="panel-kicker">SPATIAL FIELD</span><h3 id="map-interval-title">Loading interval…</h3></div><div class="map-actions"><button id="reset-map" class="icon-button" type="button" aria-label="Reset map view" title="Reset map view">◎</button></div></div>
+          <div id="map" role="application" aria-label="Interactive map showing forecast precipitation across India"><div class="map-loading" id="map-loading">Loading forecast map…</div></div>
+          <div class="map-footer"><div class="legend-title">INTERVAL PRECIPITATION</div><div class="legend-row"><span>0</span><div class="legend-gradient"></div><span>25+ mm</span></div><div class="map-footnote">Each marker averages nearby 0.25° grid cells. Select a marker to inspect its amount.</div></div>
+        </div>
+        <aside class="inspector">
+          <div class="panel-kicker">LOCATION DETAIL</div>
+          <label class="select-label" for="city-select">Choose a supported location</label>
+          <select id="city-select" class="city-select" aria-label="Choose a supported Indian location"></select>
+          <div class="rain-readout"><div class="readout-label" id="selected-interval-label">SELECTED INTERVAL</div><div class="readout-number"><span id="city-amount">—</span><small>mm</small></div><div class="readout-sub" id="city-cumulative">— mm across the forecast</div></div>
+          <div class="divider"></div>
+          <div class="threshold-head"><div><div class="panel-kicker">INTERVAL THRESHOLD</div><div class="threshold-value"><span id="threshold-value">10</span> <small>mm</small></div></div><span class="threshold-icon">⌁</span></div>
+          <input type="range" id="threshold-slider" min="1" max="50" step="1" value="10" aria-label="Rainfall threshold in millimetres">
+          <p class="threshold-copy" id="threshold-copy">Select an interval to see whether it meets your threshold.</p>
+          <div class="divider"></div>
+          <div class="panel-kicker">FORECAST RUN</div><div class="run-detail" id="run-detail">Loading provenance…</div>
+        </aside>
+      </div>
+      <div class="timeline-card">
+        <div class="timeline-head"><div><div class="panel-kicker">FORECAST TIMELINE</div><div class="timeline-sub">Choose a three-hour accumulation interval</div></div><div class="timeline-key"><span class="key-dot key-cross"></span> Threshold reached</div></div>
+        <div class="timeline" id="timeline" role="list" aria-label="Forecast intervals"></div>
+      </div>
+    </section>
+
+    <section class="compare-section" id="compare">
+      <div class="section-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> SIDE-BY-SIDE</div><h2>Compare two places.</h2></div><p class="section-aside">Same run, same interval, same units. The comparison shows location forecasts from one deterministic model.</p></div>
+      <div class="compare-card">
+        <div class="compare-controls"><label>LOCATION A<select id="compare-a" class="city-select"></select></label><span class="compare-vs">VS</span><label>LOCATION B<select id="compare-b" class="city-select"></select></label></div>
+        <div class="chart-wrap"><canvas id="compare-chart" aria-label="Comparison chart of precipitation across the forecast timeline"></canvas></div>
+        <div class="compare-totals"><div><span id="compare-a-name">—</span><b id="compare-a-total">— mm</b></div><div><span id="compare-b-name">—</span><b id="compare-b-total">— mm</b></div><div class="chart-caption">Accumulated total over displayed forecast horizon</div></div>
+      </div>
+    </section>
+
+    <section class="method-section" id="method">
+      <div class="method-title"><div class="eyebrow"><span class="eyebrow-line"></span> TRANSPARENT BY DESIGN</div><h2>What this forecast says.<br><em>And what it cannot.</em></h2><p>RainSight shows a model estimate with its timing, units, and origin. Use it as decision support, not as a local observation or official warning.</p></div>
+      <div class="method-grid"><article><span class="method-index">01</span><h3>One deterministic run</h3><p>IFS high-resolution forecast from ECMWF Open Data. A deterministic model run has no calibrated probability or uncertainty range.</p></article><article><span class="method-index">02</span><h3>Intervals are explicit</h3><p>Each amount is the difference between cumulative precipitation fields. This view reports millimetres of water-equivalent precipitation per three-hour interval.</p></article><article><span class="method-index">03</span><h3>Grid point, not gauge</h3><p>City values use the nearest 0.25° model grid point. Local terrain and rainfall can differ. Total precipitation includes frozen precipitation as water equivalent.</p></article></div>
+      <details class="provenance-details"><summary>Inspect source fields and processing provenance</summary><pre id="provenance-json">Loading provenance…</pre></details>
+    </section>
+  </main>
+  <footer><div class="footer-brand"><span class="brand-mark small">R</span> RainSight</div><div>Forecast source: ECMWF Open Data · CC BY 4.0</div><div class="footer-note">Built for careful decisions, with uncertainty kept visible.</div></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
