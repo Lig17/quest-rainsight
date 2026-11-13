@@ -83,10 +83,9 @@ session JSONL. The transcript must remain untouched.
   `20261112T1800Z`, rendered the page, and returned Chennai 0.183 mm. Image build
   and container tests used the exact processed real forecast cache.
 - Found and verified the original session transcript read-only at
-  `/home/lighittha/.codex/sessions/2026/11/13/rollout-2026-11-13T08-58-37-01a1d2f3-376e-7081-a293-afcb412143c3.jsonl`. It contains the unique application title
-  and preservation instruction. Its SHA-256 is
-  `ec39318d5ec57cb2db78a3063a784d7e6442c22324ee7803a86e81220268ba0d`; the file
-  was not edited, copied, or regenerated.
+  `/home/lighittha/.codex/sessions/2026/11/13/rollout-2026-11-13T08-58-37-01a1d2f3-376e-7081-a293-afcb412143c3.jsonl`. Read-only checks confirmed the
+  application title and preservation instruction are present. The file was not
+  directly edited, copied, or regenerated.
 - Deployment CLI checks found no authenticated cloud hosting or registry account.
   Docker Engine 28.3.3 and `cloudflared` are available. Durable public deployment
   still needs an account/authorization step. No public URL has been verified.
