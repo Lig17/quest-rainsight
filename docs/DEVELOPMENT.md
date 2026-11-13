@@ -6,8 +6,8 @@ session JSONL. The transcript must remain untouched.
 ## 2026-11-13 — environment and scientific core
 
 - Earlier terminal attempts in this session failed in Bubblewrap before execution.
-- Execution subsequently passed: project `/home/lighittha/quest-rainsight`,
-  Python 3.12.3, Git 2.43.0. Workspace contained only empty protected directories.
+- Execution subsequently passed in the original project workspace, Python
+  3.12.3, Git 2.43.0. Workspace contained only empty protected directories.
 - `.git` is a read-only mount; ordinary `git init` failed. Initialized real Git
   metadata in `.rainsight-git` inside the writable project instead. Commands use
   `git --git-dir=.rainsight-git --work-tree=.` until the mount is repaired.
@@ -82,10 +82,10 @@ session JSONL. The transcript must remain untouched.
 - Docker build completed. Container smoke check reported real run
   `20261112T1800Z`, rendered the page, and returned Chennai 0.183 mm. Image build
   and container tests used the exact processed real forecast cache.
-- Found and verified the original session transcript read-only at
-  `/home/lighittha/.codex/sessions/2026/11/13/rollout-2026-11-13T08-58-37-01a1d2f3-376e-7081-a293-afcb412143c3.jsonl`. Read-only checks confirmed the
-  application title and preservation instruction are present. The file was not
-  directly edited, copied, or regenerated.
+- Found and checked the original session transcript read-only in Codex-managed
+  session storage. Checks confirmed the application title and preservation
+  instruction are present. The file was not directly edited, copied, or
+  regenerated.
 - Deployment CLI checks found no authenticated cloud hosting or registry account.
   Docker Engine 28.3.3 and `cloudflared` are available. Durable public deployment
   still needs an account/authorization step. No public URL has been verified.
@@ -124,3 +124,53 @@ session JSONL. The transcript must remain untouched.
   container and rechecked its HTTPS URL: all 10 page, API, and asset GET routes
   returned 200; the page is still serving run `20261112T1800Z` and health reports
   `stale=false` at verification time.
+
+## 2026-11-13 follow-up — publication and Render preparation
+
+- GitHub's read-only repository API returned HTTP 200 for
+  `Lig17/quest-rainsight`: public, default branch `main`, with no contents. The
+  existing `.rainsight-git` history still contains the five original commits in
+  their original order.
+- Scanned every tracked blob in all five commits for private-key markers,
+  GitHub tokens, AWS access-key patterns, and credential assignments; no pattern
+  matches were found. The historical commits do contain personal author
+  metadata and an earlier documentation reference to the local transcript path.
+  The local path was removed from the current README and development notes; the
+  original commits were not rewritten, so those historical metadata remain.
+- Read the official ECMWF Open Data terms. Updated the visible credit with the
+  full institution name, copyright, CC BY 4.0 and Terms of Use links, the India
+  crop/interval-conversion modification note, and the ECMWF liability disclaimer.
+  The repository has no separate software licence; the ECMWF data licence does
+  not cover the application code.
+- Added `render.yaml` for a Docker Free Web Service in Singapore with
+  `/api/health`, bundled-snapshot startup, and best-effort ECMWF refresh enabled.
+  Render's current Free-service documentation says services sleep after 15
+  minutes idle and local filesystem changes disappear on sleep or restart; the
+  bundled forecast remains the startup fallback and the freshness API reports
+  its model run age.
+- After these changes, `python -m unittest discover -s tests -v` reported 16
+  passing tests; `node --check web/app.js`, Python compilation, and local
+  `render.yaml` parsing/configuration checks passed.
+- No GitHub authentication, push, or Render deployment has occurred yet.
+- Rebuilt Docker image `rainsight:0.3.4`. With auto-refresh disabled, a fresh
+  container served the committed run from `/app/data` with neither
+  `latest.json` nor raw GRIB present, confirming the image snapshot is sufficient
+  after an ephemeral-storage reset.
+- Started a separate auto-refresh-enabled container with a 512 MiB memory limit
+  and 0.1 CPU quota. Health served the bundled snapshot before refresh completed;
+  startup ingestion then wrote a valid latest cache. The successful refresh
+  still selected run `20261112T1800Z`, reported retrieval age 0.04 h and run age
+  11.8 h, and stayed below the memory limit (observed peak 191.3 MiB). A new
+  container still starts from the bundled snapshot. Free-tier idle sleeping
+  means the six-hour in-process loop is best-effort while the service is awake.
+- Final container HTTP checks returned 200 for the page, health, timeline,
+  location, spatial map, and provenance. The page identified ECMWF terms and
+  licence; Chennai's first interval was 0.183 mm, the timeline had 16 intervals,
+  and the map returned 3,969 aggregated cells.
+- A headless Chromium mobile emulation at 390 CSS pixels reported no horizontal
+  overflow. All four navigation links, 16 timeline slots, eight supported
+  locations, the Leaflet map layer, and a rendered two-city comparison chart
+  were present. The chart used Bengaluru and Mumbai in the browser check.
+- GitHub CLI 2.104.0 was placed under `/tmp` after verifying its SHA-256 against
+  the official release checksum file. Browser/device authentication has not
+  been started, so no authentication code or token was captured in this log.

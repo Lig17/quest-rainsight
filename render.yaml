@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: quest-rainsight
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: RAINSIGHT_AUTO_REFRESH
+        value: "1"
+      - key: RAINSIGHT_ECMWF_SOURCE
+        value: ecmwf
