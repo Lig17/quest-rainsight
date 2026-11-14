@@ -52,27 +52,15 @@ python3 -m venv .venv
 
 Open `http://127.0.0.1:8000`. Set `RAINSIGHT_AUTO_REFRESH=0` to disable scheduled
 downloads or `RAINSIGHT_DATA_DIR=/path/to/cache` to select another cache. While
-while the process is running, the application attempts an ECMWF refresh every
-six hours; a failed refresh preserves the last validated cache and reports its
-age and staleness. Map tiles come from OpenStreetMap.
+the process is running, the application attempts an ECMWF refresh every six
+hours; a failed refresh preserves the last validated cache and reports its age
+and staleness. Map tiles come from OpenStreetMap.
 
-## Deploy on Render
+## Public deployment
 
-The repository includes a Render Blueprint at `render.yaml`. In Render, create
-a Blueprint from `Lig17/quest-rainsight` on the `main` branch and apply the
-Docker Web Service configuration. It selects the Free plan in Singapore,
-checks `/api/health`, bundles the verified processed forecast snapshot, and
-enables best-effort ECMWF refresh at startup and every six hours while the
-service is running.
+The application is deployed at [quest-rainsight-2glz.onrender.com](https://quest-rainsight-2glz.onrender.com) from the public `Lig17/quest-rainsight` GitHub repository. It uses the Docker Free Web Service configured in `render.yaml`. The service bundles the verified reference snapshot and attempts ECMWF refresh at startup and every six hours while awake.
 
-The bundled forecast remains available if a refresh fails. The app reports the
-retrieval age and model initialization time, and labels old data as stale. A
-successful refresh writes to the container's local filesystem; Render Free
-services have ephemeral storage, so that refreshed cache can disappear after a
-restart, redeploy, or idle spin-down. The committed snapshot is the fallback on
-the next start. Free services also sleep after 15 minutes without traffic, so
-the six-hour refresh is not a guaranteed schedule while the service is asleep.
-The first request after sleep can take about a minute to wake the service.
+Render Free has ephemeral local storage and sleeps after idle periods. A successful refresh can be lost on restart or spin-down; the bundled 2026-11-12 18 UTC snapshot is then the fallback. Its 48-hour horizon ended at 2026-11-14 18 UTC. RainSight reports model initialization separately from retrieval age and labels each interval elapsed, in progress, or upcoming. The health API reports a future forecast available only when at least one complete interval starts in the future; an in-progress interval's full-period total is not treated as a future interval. When a restart finds no complete future interval, the browser waits up to 20 minutes for the startup refresh and displays the wait. Expiry, when all interval end times have passed, is reported separately. The refresh loop retains the prior cache if ECMWF retrieval or validation fails. Since storage is ephemeral, freshness after restart still depends on a successful live refresh. A sleeping Free service may take about a minute to answer its first request.
 
 ## API
 
@@ -108,20 +96,15 @@ never probabilities or calibrated uncertainty estimates.
 
 ## Deployment and session record
 
-The Docker image includes the processed real forecast cache and refreshes it at
-runtime. The temporary review URL uses an account-free Cloudflare Quick Tunnel
-and the current host process, so it has no uptime guarantee. The Render
-Blueprint is prepared, but its public service has not yet been deployed. See
-[DEVELOPMENT.md](docs/DEVELOPMENT.md) for the chronological record and actual
-test outcomes.
+The chronological live checks, source commits, test results, and deployment
+status are recorded in [DEVELOPMENT.md](docs/DEVELOPMENT.md). Read the API's
+model initialization and data freshness; page retrieval time is not a forecast
+run time.
 
-All development was done in the original session. The original JSONL transcript
-is in Codex-managed session storage outside this repository. It was checked
-read-only for this application's title and transcript-preservation instruction;
-it was not copied into or directly modified by this project.
+All development was done in the original session. The original JSONL transcript remains in Codex-managed session storage outside this repository. It was checked read-only; it was not copied into or directly modified by this project.
 
 The environment mounts `.git` read-only. Authentic commit history is in
-`.rainsight-git`, including the initial milestone commit; use:
+`.rainsight-git`; use:
 
 ```bash
 git --git-dir=.rainsight-git --work-tree=. status

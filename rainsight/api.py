@@ -76,15 +76,35 @@ def load_forecast(run_id: Optional[str] = None) -> dict:
     return payload
 
 
+def interval_phase(interval: dict, now: Optional[datetime] = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    start = datetime.fromisoformat(interval["start_time"])
+    end = datetime.fromisoformat(interval["end_time"])
+    if end <= now:
+        return "elapsed"
+    if start < now:
+        return "in_progress"
+    return "upcoming"
+
+
 def freshness(payload: dict) -> dict:
     now = datetime.now(timezone.utc)
     retrieved = datetime.fromisoformat(payload["retrieved_at"])
     initialized = datetime.fromisoformat(payload["initialization"])
+    interval_bounds = [(datetime.fromisoformat(i["start_time"]),
+                        datetime.fromisoformat(i["end_time"]))
+                       for i in payload["intervals"]]
     retrieved_age = max(0.0, (now - retrieved).total_seconds() / 3600)
     run_age = max(0.0, (now - initialized).total_seconds() / 3600)
+    remaining = sum(end > now for _, end in interval_bounds)
+    upcoming = sum(start >= now for start, _ in interval_bounds)
+    horizon_end = max(end for _, end in interval_bounds)
+    expired = remaining == 0
     return {"retrieved_at": payload["retrieved_at"], "run_age_hours": round(run_age, 1),
-            "cache_age_hours": round(retrieved_age, 2),
-            "stale": run_age > 18 or retrieved_age > 24}
+            "cache_age_hours": round(retrieved_age, 2), "forecast_horizon_end": horizon_end.isoformat(),
+            "remaining_interval_count": remaining, "upcoming_interval_count": upcoming,
+            "future_forecast_available": upcoming > 0, "expired": expired,
+            "stale": expired or run_age > 18 or retrieved_age > 24}
 
 
 def threshold_value(value: float) -> float:
@@ -102,8 +122,15 @@ def index():
 def health():
     try:
         p = load_forecast()
-        return {"service": "ok", "forecast_available": True, "run_id": p["run_id"],
-                "freshness": freshness(p)}
+        current = freshness(p)
+        available = current["future_forecast_available"]
+        result = {"service": "ok", "forecast_available": available,
+                  "run_id": p["run_id"], "freshness": current}
+        if not available:
+            result["detail"] = ("Forecast horizon has ended; waiting for a current ECMWF run"
+                                 if current["expired"] else
+                                 "No complete future intervals remain; waiting for a refreshed ECMWF run")
+        return result
     except HTTPException as exc:
         return {"service": "ok", "forecast_available": False, "detail": exc.detail}
 
@@ -135,10 +162,12 @@ def timeline(run_id: Optional[str] = None, threshold_mm: float = Query(10, ge=0,
     p = load_forecast(run_id)
     threshold = threshold_value(threshold_mm)
     intervals = []
+    now = datetime.now(timezone.utc)
     for interval in p["intervals"]:
         values = interval["rainfall_mm"]
         intervals.append({k: interval[k] for k in ("start_step", "end_step", "start_time", "end_time")}
-                         | {"max_grid_mm": max(values),
+                         | {"phase": interval_phase(interval, now),
+                            "max_grid_mm": max(values),
                             "mean_grid_mm": round(sum(values) / len(values), 3),
                             "threshold_crossed_somewhere": max(values) >= threshold,
                             "rounding_tolerance_mm": interval.get("rounding_tolerance_mm", 0)})
@@ -159,10 +188,12 @@ def location_forecast(location_id: str, run_id: Optional[str] = None,
     amounts = [i["rainfall_mm"][index] for i in p["intervals"]]
     rows = []
     total = 0.0
+    now = datetime.now(timezone.utc)
     for i, amount in zip(p["intervals"], amounts):
         total += amount
         rows.append({"start_step": i["start_step"], "end_step": i["end_step"],
                      "start_time": i["start_time"], "end_time": i["end_time"],
+                     "phase": interval_phase(i, now),
                      "rainfall_mm": round(amount, 3), "cumulative_mm": round(total, 3),
                      "threshold_crossed": amount >= threshold,
                      "rounding_tolerance_mm": i.get("rounding_tolerance_mm", 0)})
@@ -192,8 +223,8 @@ def spatial(end_step: int = Query(..., ge=3), run_id: Optional[str] = None):
                          "properties": {"rainfall_mm": round(total / count, 3), "sample_count": count}})
     return {"type": "FeatureCollection", "run_id": p["run_id"], "end_step": end_step,
             "start_step": interval["start_step"], "start_time": interval["start_time"],
-            "end_time": interval["end_time"], "units": "mm", "features": features,
-            "freshness": freshness(p)}
+            "end_time": interval["end_time"], "phase": interval_phase(interval),
+            "units": "mm", "features": features, "freshness": freshness(p)}
 
 
 @app.get("/api/provenance")

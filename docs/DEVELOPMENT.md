@@ -174,3 +174,79 @@ session JSONL. The transcript must remain untouched.
 - GitHub CLI 2.104.0 was placed under `/tmp` after verifying its SHA-256 against
   the official release checksum file. Browser/device authentication has not
   been started, so no authentication code or token was captured in this log.
+
+
+## 2026-11-14 — live freshness and elapsed-interval audit
+
+- Read-only live checks at 2026-11-14 16:10 UTC returned the same run ID from
+  health, provenance, timeline, Chennai, and spatial endpoints:
+  `20261114T0600Z`. The API reported retrieval at 16:10 UTC, run age 10.2 h,
+  cache age 0.03 h, `stale=false`, 16 intervals, and horizon end
+  2026-11-16 06 UTC. ECMWF's official client `latest(type=fc,param=tp,step=48)`
+  lookup on both the ECMWF portal and AWS returned `20261114T0600Z` at
+  15:38 UTC. The 12 UTC run was not yet available at that check; retrieval age
+  was not mistaken for initialization age.
+- The published app initialized the timeline at step 3 (06–09 UTC) after that
+  interval had ended. The bundled commit snapshot is initialized 2026-11-12
+  18 UTC and its 48 h horizon ends 2026-11-14 18 UTC. Before this correction,
+  `/api/health` still set `forecast_available=true` after all snapshot intervals
+  ended, though the age-based `stale` flag would be true.
+- Live GRIB provenance for the 06 UTC run identified 16 CCSDS-packed fields,
+  parameter 228 (`tp`), units metres, `stepType=accum`, and `startStep=0`.
+  Per-field half-quantum error bounds ranged from 0.0152588 to 0.1220703 mm;
+  adjacent-field interval tolerance peaked at 0.244140625 mm. The decoded
+  Chennai step-3 value 0.000152587890625 m converted to 0.152587890625 mm and
+  matched the displayed value exactly. The run reported 1,740 clipped negative
+  grid-cell differences, each constrained by its adjacent packing bounds; the
+  larger-decrease regression rejects differences beyond that bound.
+- The focused correction adds elapsed/in-progress/upcoming phase labels,
+  prevents selection of elapsed intervals, selects the first still-valid
+  interval by default, exposes an explicit expired horizon in freshness/health,
+  waits up to five minutes for a post-restart refresh, and pins browser API calls
+  to the run selected by health. Regression coverage includes expired snapshots,
+  interval phase, and failed-refresh cache preservation.
+
+
+## 2026-11-14 — restart fallback and future-window correction
+
+- A second read-only public audit at 16:46 UTC returned HTTP 200 for the
+  homepage, health, provenance, timeline, Chennai, and spatial endpoints. The
+  Render instance had restarted onto the bundled `20261112T1800Z` snapshot,
+  retrieved at 2026-11-13 04:11 UTC. It reported run age 46.9 h, cache age
+  36.74 h, and `stale=true`. The horizon ended at 18 UTC; at the check only the
+  15–18 UTC interval remained, and it was already in progress. A fresh read of
+  ECMWF's supported Python client `latest(type=fc,param=tp,step=48)` returned
+  `20261114T0600Z` from both the ECMWF portal and AWS mirror. Therefore Render
+  was serving the old fallback, not the latest available run. This was a
+  genuine freshness weakness after ephemeral-storage restart.
+- At 16:46 UTC the prior API still reported `forecast_available=true` for that
+  run. Its last amount covered a three-hour interval that had already begun;
+  using that full-period total as a future interval could mislead a user. The
+  new health contract requires at least one interval start time in the future.
+  It reports in-progress and fully expired states separately, and exposes the
+  remaining and upcoming interval counts.
+- The browser now waits up to 20 minutes for startup refresh when no complete
+  future interval is present, shows the waiting state, selects the first
+  upcoming interval by default, and pins requests to the run ID chosen by
+  health so a refresh cannot mix model runs during one page load. It continues
+  to allow explicit inspection of a still-in-progress interval when a future
+  forecast is available.
+- Regression check: `.venv/bin/python -m unittest discover -s tests -v` ran 19
+  tests, all passed. `node --check web/app.js` and `git diff --check` passed.
+  Docker build `rainsight:audit2` succeeded (image SHA-256
+  `e0a963b367125c430bb20299c1905ce82aed85f37bff22245843471abdbda11c`). A
+  temporary container on port 18766 returned HTTP 200 for `/` and health. With
+  the bundled snapshot at the then-current time, health correctly returned
+  `forecast_available=false`, `expired=false`, one remaining interval, zero
+  upcoming intervals, and the in-progress phase. The first local container
+  attempt could not bind port 8765; the smoke check was rerun successfully on
+  18765 and then 18766. Temporary containers were stopped after checking.
+- The raw GRIB evidence remains consistent with the processing policy:
+  16 fields, `tp`/228, metres, `stepType=accum`, `startStep=0`, and
+  `typeOfStatisticalProcessing=1`. CCSDS packing-derived per-field half-quantum
+  bounds are summed for adjacent cumulative fields; the test suite covers a
+  bounded negative increment and rejects a large negative decrease. The
+  displayed city field is independently cross-checked against decoded GRIB.
+- This correction is local and has not yet been pushed or deployed at the time
+  of this entry. The preceding public source remains commit `5379514`; final
+  publication and Render checks must be appended after they are observed.
