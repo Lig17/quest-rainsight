@@ -2,6 +2,7 @@ services:
   - type: web
     name: quest-rainsight
     runtime: docker
+    autoDeployTrigger: commit
     plan: free
     region: singapore
     healthCheckPath: /api/health

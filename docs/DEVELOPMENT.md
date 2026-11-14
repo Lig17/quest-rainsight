@@ -250,3 +250,22 @@ session JSONL. The transcript must remain untouched.
 - This correction is local and has not yet been pushed or deployed at the time
   of this entry. The preceding public source remains commit `5379514`; final
   publication and Render checks must be appended after they are observed.
+
+
+## 2026-11-14 — Render source deployment follow-up
+
+- GitHub returned commit `2cdf819e8239dace5b759f5118af3e9c7ba7d1ad` from the
+  public commit endpoint, and `render.yaml` plus the updated README were visible
+  on `main`. The pre-correction `/static/app.js` hash was still being served by
+  Render at approximately 17:54 UTC, even though the data cache had refreshed
+  to run `20261114T0600Z` at 17:50:40 UTC. The API response also still lacked
+  the new interval-phase and future-window fields. The source correction was
+  pushed, but the application code had not yet been deployed.
+- Render's current Blueprint reference says `autoDeployTrigger: commit` deploys
+  each commit and that an omitted field retains an existing service's setting.
+  To make the intended deploy behavior explicit, the Blueprint now sets
+  `autoDeployTrigger: commit`. Source: https://render.com/docs/blueprint-spec.
+  This requires a subsequent Blueprint sync if Render's Auto Sync is off; the
+  public asset and API responses must be rechecked after the push. If it still
+  serves the old commit, a manual deploy from the Render Dashboard will be
+  required.
