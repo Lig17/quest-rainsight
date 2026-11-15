@@ -450,10 +450,15 @@ session JSONL. The transcript must remain untouched.
   20 mm threshold updated, and a map popup displayed the grid amount and IST
   interval. This records the initial timing assertion as well as the successful
   focused repeat.
-- No live Render restart was forced after this audit. The actual prior restart
-  failure was observed and corrected: exhausted runs now report unavailable,
-  and the bundled Nov 15 00 UTC processed forecast supplies a current restart
-  fallback on submission day. The Docker snapshot test and post-push live
-  refresh both passed; refresh failure preservation is covered by the offline
-  regression test. Refresh on Render Free remains best-effort and local storage
-  remains ephemeral.
+- The docs-only auto-deploy after this audit caused a Render restart. Its first
+  health check fell back to bundled run `20261115T0000Z` (10 upcoming intervals,
+  horizon Nov 17 00 UTC, 16.2 h run age, 7.31 h since retrieval). It did not
+  present that older run as newly initialized: both initialization and
+  retrieval age were returned, and it remained inside the explicit 18 h run-age
+  stale threshold. A later check at 16:14:22 UTC showed the startup refresh had
+  succeeded and replaced the fallback with `20261115T0600Z` (12 upcoming
+  intervals, horizon Nov 17 06 UTC, 10.3 h run age, 0.03 h since retrieval).
+  This is direct evidence that the bundled fallback remained usable during
+  restart and the live refresh then advanced it. Refresh failure preservation
+  is also covered by the offline regression test. Render Free refresh remains
+  best-effort and local storage remains ephemeral.
