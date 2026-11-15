@@ -366,3 +366,58 @@ session JSONL. The transcript must remain untouched.
   refresh remains best-effort and the latest listed run may advance before this
   log is read. The app exposes its initialization and retrieval times for that
   reason.
+
+
+## 2026-11-15 — live run, cache precedence, and browser retry audit
+
+- Read-only HTTPS checks of the public Render service at 15:34 UTC returned
+  HTTP 200 from health, provenance, timeline, Chennai, and spatial endpoints.
+  Health, provenance, timeline, Chennai, and map all agreed on IFS run
+  `20261115T0600Z`, initialized at 06:00 UTC and retrieved at 15:34:35 UTC.
+  Health reported 9.6 h model-run age, 0.07 h cache age, `stale=false`,
+  `expired=false`, 12 upcoming intervals, and a horizon through Nov 17 06 UTC.
+  This is a newer actual ECMWF run than the committed Nov 15 00 UTC restart
+  snapshot; its 15:34 retrieval time is not being used as the initialization
+  time.
+- Live provenance reports 16 fields, parameter 228 (`tp`), metres, CCSDS
+  packing, accumulated from step zero, and statistical processing code 1. The
+  step 6–9 Guwahati increase independently represented by the processed cache
+  is 0.1220703125 mm, equal to the displayed interval. The adjacent packed
+  fields' half-quantum bounds set the interval tolerance; the processor refuses
+  decreases beyond that tolerance. The test suite also rejects a large
+  negative increment. The live run recorded 500 clipped, within-bound grid
+  differences. Threshold crossings use `>=`; API instants are UTC and the
+  interface labels converted India Standard Time. City values use the nearest
+  0.25-degree grid point; map markers aggregate local grid cells and are not
+  station observations.
+- The live timeline and Chennai response each contained 16 intervals, with
+  matching run IDs and interval boundaries. `spatial?end_step=15` returned
+  3,969 cells for steps 12–15 and marked that interval upcoming. The frontend
+  retains eight named-location time series; the map can inspect grid-cell
+  amounts but does not provide a full time series for arbitrary clicked cells.
+  I did not add that optional feature on submission day.
+- A prior headless browser attempt against the public page showed the UI's
+  initial `fetch` failure rather than loading the forecast. Added one retry for
+  transient fetch/5xx errors and made the startup health wait recover from
+  transient request errors while retaining the explicit 20-minute wait limit.
+  In local Chromium mobile checks using the real bundled Nov 15 00 UTC forecast,
+  the test harness rejected the first health request once; the second request
+  succeeded and populated real data. The browser showed 16 intervals, eight
+  locations, 3,969 map markers, a comparison chart, and a 390 px viewport with
+  no horizontal overflow. Selecting an upcoming interval, Mumbai, Kochi, and a
+  20 mm threshold updated their respective views.
+- That local check also exposed a valid but stale `data/latest.json` masking a
+  newer bundled snapshot. The loader now compares run IDs for the valid runtime
+  cache and newest valid bundled run, chooses the newer model initialization,
+  and falls back when `latest.json` is malformed. Regression coverage exercises
+  stale, same-run, missing, and malformed cache cases. This avoids mistaking a
+  recent retrieval of an old run for a recent model run.
+- Final local checks after these changes: all 19 unit/API tests passed;
+  `node --check web/app.js` and `git diff --check` passed. A final browser run
+  used the checkout's real data directory with both its older runtime cache and
+  the committed newer processed snapshot; after the loader change, health and
+  the interface selected the newer run, and the one-shot failed health fetch
+  recovered on retry.
+- At this audit, the public deployment predates these last local corrections.
+  The code changes are to be committed, published, and verified against the
+  public URL before submission; no deployment is claimed here.

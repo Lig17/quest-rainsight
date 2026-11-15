@@ -56,23 +56,49 @@ app.mount("/static", StaticFiles(directory=WEB), name="static")
 
 
 def load_forecast(run_id: Optional[str] = None) -> dict:
-    if run_id is None:
-        path = DATA / "latest.json"
-        if not path.exists():
-            snapshots = sorted(p for p in DATA.glob("*.json") if p.name != "latest.json")
-            path = snapshots[-1] if snapshots else path
-    else:
-        path = DATA / f"{run_id}.json"
     if run_id is not None and ("/" in run_id or "\\" in run_id or run_id in (".", "..")):
         raise HTTPException(400, "Invalid run identifier")
+
+    if run_id is None:
+        latest_path = DATA / "latest.json"
+        latest = _read_valid_cache(latest_path)
+        newest_snapshot = None
+        snapshot_paths = sorted((p for p in DATA.glob("*.json")
+                                 if p.name != "latest.json"), reverse=True)
+        for snapshot_path in snapshot_paths:
+            newest_snapshot = _read_valid_cache(snapshot_path)
+            if newest_snapshot is not None:
+                break
+        # A surviving runtime cache can be older than a newly bundled run.
+        # Compare model run IDs, not retrieval times, and keep a usable snapshot
+        # when latest.json is malformed or incomplete.
+        candidates = [p for p in (latest, newest_snapshot) if p is not None]
+        if candidates:
+            return max(candidates, key=lambda payload: payload["run_id"])
+        if latest_path.exists() or snapshot_paths:
+            raise HTTPException(503, "Forecast cache is unavailable or malformed")
+        raise HTTPException(503, "No successful ECMWF forecast cache is available")
+
+    path = DATA / f"{run_id}.json"
     try:
         payload = json.loads(path.read_text())
     except FileNotFoundError:
         raise HTTPException(503, "No successful ECMWF forecast cache is available")
     except (OSError, json.JSONDecodeError):
         raise HTTPException(503, "Forecast cache is unavailable or malformed")
-    if not isinstance(payload.get("intervals"), list) or not payload["intervals"]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("intervals"), list) or not payload["intervals"]:
         raise HTTPException(503, "Forecast cache has no validated intervals")
+    return payload
+
+
+def _read_valid_cache(path: Path) -> Optional[dict]:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if (not isinstance(payload, dict) or not isinstance(payload.get("run_id"), str) or
+        not isinstance(payload.get("intervals"), list) or not payload["intervals"]):
+        return None
     return payload
 
 

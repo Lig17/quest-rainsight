@@ -113,7 +113,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("retaining prior cache", " ".join(captured.output))
         self.assertEqual(cache.read_bytes(), before)
 
-    def test_latest_falls_back_to_newest_processed_run_snapshot(self):
+    def test_newer_snapshot_supersedes_stale_or_missing_latest_cache(self):
         newer = json.loads((api.DATA / f"{self.run_id}.json").read_text())
         newer_initialization = self.initialization + timedelta(hours=3)
         newer_id = newer_initialization.strftime("%Y%m%dT%H%MZ")
@@ -124,10 +124,27 @@ class ApiTests(unittest.TestCase):
             interval["start_time"] = (newer_initialization + timedelta(hours=interval["start_step"])).isoformat()
             interval["end_time"] = (newer_initialization + timedelta(hours=interval["end_step"])).isoformat()
         (api.DATA / f"{newer_id}.json").write_text(json.dumps(newer))
+
+        # A valid but older process cache must not hide a newer bundled run.
+        result = self.client.get("/api/location/test-city").json()
+        self.assertEqual(result["run_id"], newer_id)
+        self.assertEqual(result["intervals"][0]["rainfall_mm"], 1.0)
+
+        # A same-run runtime cache remains a valid source, and a missing cache
+        # still falls back to the committed processed snapshot.
+        refreshed = json.loads(json.dumps(newer))
+        refreshed["intervals"][0]["rainfall_mm"][0] = 7.0
+        (api.DATA / "latest.json").write_text(json.dumps(refreshed))
+        result = self.client.get("/api/location/test-city").json()
+        self.assertEqual(result["intervals"][0]["rainfall_mm"], 7.0)
         (api.DATA / "latest.json").unlink()
         result = self.client.get("/api/location/test-city").json()
         self.assertEqual(result["run_id"], newer_id)
         self.assertEqual(result["intervals"][0]["rainfall_mm"], 1.0)
+
+        (api.DATA / "latest.json").write_text("{malformed")
+        result = self.client.get("/api/location/test-city").json()
+        self.assertEqual(result["run_id"], newer_id)
 
     def test_locations_timeline_and_threshold(self):
         self.assertEqual(self.client.get("/api/locations").json()["locations"][0]["id"], "test-city")
