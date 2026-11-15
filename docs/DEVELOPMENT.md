@@ -269,3 +269,57 @@ session JSONL. The transcript must remain untouched.
   public asset and API responses must be rechecked after the push. If it still
   serves the old commit, a manual deploy from the Render Dashboard will be
   required.
+
+
+## 2026-11-14 19:00 UTC — deployed freshness correction and end-to-end check
+
+- Render began serving the corrected source after the GitHub `main` updates,
+  without a manual deployment action. The public `/static/app.js` and
+  `/static/styles.css` bytes matched the local source exactly (SHA-256
+  `f7638e8c07be5eef62046b10a19c21567d8456b3a75cf647ed3f54c6acc894ae` and
+  `86da5dce8c40f119c72c626db3d56a89615f88fed7a9a36fc012f53d2dc78ca1`). The
+  API response contains the new future-window fields. The public service does
+  not expose its exact Render deployment SHA, so source files and behavior were
+  compared directly with the current GitHub `main` source instead.
+- After code deployment, health initially reported the expired bundled fallback
+  as unavailable. The browser showed its waiting state. A later live check
+  returned the processed `20261114T0600Z` IFS run, retrieved at 18:25:45 UTC.
+  At 19:00 UTC the run age was 13.0 h, retrieval age 0.59 h, `stale=false`,
+  horizon end 2026-11-16 06 UTC, and 11 intervals started in the future. The
+  official client returned the same latest 48-hour IFS `tp` run from the ECMWF
+  portal and AWS mirror. Thus current availability followed an actual refresh;
+  it was not inferred from the retrieval timestamp alone.
+- Homepage, health, provenance, timeline, Chennai, Bengaluru, and spatial
+  endpoints returned HTTP 200. All reported `20261114T0600Z`; location phases
+  matched the timeline. The timeline had 16 intervals and 11 upcoming; its
+  first upcoming interval was 21–00 UTC (02:30–05:30 IST). Chennai's first
+  interval was 0.153 mm and its interval total was 0.488 mm. Spatial step 3
+  returned 3,969 aggregated cells and correctly marked that old step elapsed.
+- Final source metadata check found 16 fields with parameter 228, units m,
+  accumulated `tp`, startStep 0, and `typeOfStatisticalProcessing=1`. The
+  per-field half-quantum bounds ranged from 0.0152588 to 0.1220703 mm; the
+  largest sum for adjacent fields was 0.244140625 mm. The recorded Chennai
+  cross-check independently decoded 0.000152587890625 m and matched the
+  processed 0.152587890625 mm exactly. The 1,740 clipped differences were
+  within per-pair quantization bounds; the synthetic regression rejects a
+  decrease larger than its allowed tolerance.
+- Headless Chromium loaded the live interface at desktop width 1440 and mobile
+  width 390. Desktop document width was 1,425 px; mobile document width matched
+  its 390 px viewport with no horizontal overflow. The browser had 16 timeline
+  slots, 11 upcoming, eight city options, 3,969 map cells, and a rendered
+  comparison canvas. Selecting timeline step 21 changed the map interval;
+  selecting Mumbai, changing a comparison location to Kochi, and changing the
+  threshold to 20 mm each updated their corresponding data views successfully.
+  A mobile viewport screenshot was inspected from `/tmp`; no screenshot was
+  committed.
+- Final `.venv/bin/python -m unittest discover -s tests -v`: 19 tests passed.
+  `node --check web/app.js`, YAML parsing of the Docker Free service and
+  `autoDeployTrigger: commit`, and `git diff --check` passed. GitHub `main`
+  contains the original six commits and the two authentic follow-up commits
+  `2cdf819` and `f16a139`; no `.jsonl` file is in the committed tree.
+- Remaining limits: deterministic IFS provides no calibrated probabilities;
+  the map displays local spatial averages and does not expose an arbitrary
+  grid-cell timeline, while the eight city presets do. Render Free's storage is
+  ephemeral and its refresh is best-effort while awake. On an expired restart
+  the interface waits up to 20 minutes; if refresh fails, it reports
+  unavailability rather than showing the expired run as a current forecast.
