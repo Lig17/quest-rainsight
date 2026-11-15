@@ -113,10 +113,20 @@ class ApiTests(unittest.TestCase):
         self.assertIn("retaining prior cache", " ".join(captured.output))
         self.assertEqual(cache.read_bytes(), before)
 
-    def test_latest_falls_back_to_processed_run_snapshot(self):
+    def test_latest_falls_back_to_newest_processed_run_snapshot(self):
+        newer = json.loads((api.DATA / f"{self.run_id}.json").read_text())
+        newer_initialization = self.initialization + timedelta(hours=3)
+        newer_id = newer_initialization.strftime("%Y%m%dT%H%MZ")
+        newer["run_id"] = newer_id
+        newer["initialization"] = newer_initialization.isoformat()
+        newer["retrieved_at"] = datetime.now(timezone.utc).isoformat()
+        for interval in newer["intervals"]:
+            interval["start_time"] = (newer_initialization + timedelta(hours=interval["start_step"])).isoformat()
+            interval["end_time"] = (newer_initialization + timedelta(hours=interval["end_step"])).isoformat()
+        (api.DATA / f"{newer_id}.json").write_text(json.dumps(newer))
         (api.DATA / "latest.json").unlink()
         result = self.client.get("/api/location/test-city").json()
-        self.assertEqual(result["run_id"], self.run_id)
+        self.assertEqual(result["run_id"], newer_id)
         self.assertEqual(result["intervals"][0]["rainfall_mm"], 1.0)
 
     def test_locations_timeline_and_threshold(self):

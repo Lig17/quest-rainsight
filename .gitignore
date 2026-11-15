@@ -8,5 +8,6 @@ __pycache__/
 data/*
 !data/.gitkeep
 !data/20261112T1800Z.json
+!data/20261115T0000Z.json
 *.grib*
 *.jsonl

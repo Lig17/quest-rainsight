@@ -323,3 +323,46 @@ session JSONL. The transcript must remain untouched.
   ephemeral and its refresh is best-effort while awake. On an expired restart
   the interface waits up to 20 minutes; if refresh fails, it reports
   unavailability rather than showing the expired run as a current forecast.
+
+
+## 2026-11-15 — current real snapshot for restart fallback
+
+- The Nov 15 check at 06:31 UTC found Render again serving the bundled Nov 12
+  run after a restart. Its health response correctly said `expired=true` and
+  `forecast_available=false`. ECMWF's official client returned `20261115T0000Z`
+  as the latest 48-hour IFS `tp` run from both the portal and AWS at that check.
+  A refresh had recovered the Nov 14 18 UTC run earlier, but the ephemeral
+  storage was later lost again; the committed Nov 12 bundle was the source of
+  the temporary unavailability.
+- Retrieved the actual `20261115T0000Z` run with the official client into
+  `/tmp/rainsight-snapshot-20261115`. The raw GRIB was 4,958,530 bytes and the
+  processed JSON was 1,621,518 bytes. It contained 16 fields for steps 3–48,
+  all `tp`/228, metres, accumulated from step zero, with
+  `typeOfStatisticalProcessing=1`. The horizon ends 2026-11-17 00 UTC. The raw
+  GRIB SHA-256 matched the processed provenance. A decoded Guwahati step-3
+  value of 0.00006103515625 m converted to 0.06103515625 mm and matched the
+  independently recorded processed value. Half-quantum bounds ranged from
+  0.0305176 to 0.1220703 mm; the maximum adjacent interval bound was
+  0.244140625 mm. The run clipped 689 bounded negative grid increments.
+- The first wrapper that invoked ingestion could not parse captured stdout
+  because it was empty even though the command exited successfully and wrote
+  the validated output files. I inspected those files directly, checked the
+  metadata and raw hash, then copied only the processed JSON into `data/`; the
+  raw GRIB and runtime `latest.json` were excluded from the repository.
+- Added the new snapshot as a fallback and a `.gitignore` exception. With no
+  runtime `latest.json`, `load_forecast` chooses the lexicographically newest
+  run-id JSON snapshot. Updated the offline regression to create two synthetic
+  fixture snapshots and confirm that the newer one is selected.
+- `.venv/bin/python -m unittest discover -s tests -v` passed all 19 tests.
+  JavaScript syntax and whitespace checks passed. Docker image
+  `rainsight:submission` built successfully (SHA-256
+  `a074cf1d85f51383c2db899fd5ed7ec9c1c5dfdd4a2a325df9eb503af16a9059`). A new
+  auto-refresh-disabled container returned HTTP 200 and selected
+  `20261115T0000Z` immediately, with `forecast_available=true`, 12 future
+  intervals, `expired=false`, and `stale=false`. This removes the expired
+  Nov 12 snapshot as the only usable fallback on submission day.
+- This snapshot was the latest run confirmed by ECMWF at 06:31 UTC and the run
+  returned by the ingestion discovery. Forecast data continues to age; Render's
+  refresh remains best-effort and the latest listed run may advance before this
+  log is read. The app exposes its initialization and retrieval times for that
+  reason.
