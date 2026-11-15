@@ -418,6 +418,42 @@ session JSONL. The transcript must remain untouched.
   the committed newer processed snapshot; after the loader change, health and
   the interface selected the newer run, and the one-shot failed health fetch
   recovered on retry.
-- At this audit, the public deployment predates these last local corrections.
-  The code changes are to be committed, published, and verified against the
-  public URL before submission; no deployment is claimed here.
+- Published commit `ac49e7e` was confirmed as GitHub `main`; the remote commit
+  list retains the six original commits, the four earlier follow-ups, and this
+  new commit in order. The GitHub tree contains `render.yaml` and the processed
+  `20261115T0000Z` snapshot, and contains no `.jsonl` files. No history was
+  rewritten.
+- After the push, public HTTPS checks at 16:05 UTC returned HTTP 200 for the
+  homepage, health, provenance, timeline, Chennai, spatial step 15, and both
+  static assets. Health/provenance/timeline/location/map agreed on run
+  `20261115T0600Z`; health had 12 upcoming intervals, horizon Nov 17 06 UTC,
+  `stale=false`, and `expired=false`. The processed cache was retrieved at
+  16:05:35 UTC (about 10.1 h after initialization). The live spatial interval
+  was steps 12–15, with 3,969 cells. The committed UI asset SHA-256
+  `82e671083a5910a93b93b3062616e0113b89807939388dc4f5e719fbe5e17111` and
+  stylesheet SHA-256
+  `86da5dce8c40f119c72c626db3d56a89615f88fed7a9a36fc012f53d2dc78ca1`
+  exactly matched the bytes served from Render. Render does not expose its
+  running Git SHA through the public application, so exact backend build-SHA
+  introspection remains unavailable; the service's served frontend, API
+  behavior, freshness, and post-push refresh were verified.
+- Public headless Chromium loaded the published app at a 1440 px desktop and
+  390 px mobile viewport. Desktop document width was 1,425 px; mobile width was
+  exactly 390 px, with map width 358 px and comparison chart width 340 px. The
+  browser showed 16 intervals, 12 upcoming, eight locations, four navigation
+  links, 3,969 map markers, and a rendered comparison canvas. Timeline selection
+  changed the displayed map interval. The aggregate interaction test's first
+  city-change wait did not observe Mumbai before its 18 s timeout, although the
+  final state after the threshold refresh showed Mumbai. A focused public
+  rerun changed Chennai to Mumbai with HTTP 200 in 612 ms and no error toast.
+  Comparison changed to Kochi after waiting for the network response, the
+  20 mm threshold updated, and a map popup displayed the grid amount and IST
+  interval. This records the initial timing assertion as well as the successful
+  focused repeat.
+- No live Render restart was forced after this audit. The actual prior restart
+  failure was observed and corrected: exhausted runs now report unavailable,
+  and the bundled Nov 15 00 UTC processed forecast supplies a current restart
+  fallback on submission day. The Docker snapshot test and post-push live
+  refresh both passed; refresh failure preservation is covered by the offline
+  regression test. Refresh on Render Free remains best-effort and local storage
+  remains ephemeral.
