@@ -8,12 +8,14 @@ import subprocess
 import sys
 from contextlib import asynccontextmanager
 import json
+from math import isfinite
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from .processing import nearest_index
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("RAINSIGHT_DATA_DIR", ROOT / "data"))
@@ -226,6 +228,58 @@ def location_forecast(location_id: str, run_id: Optional[str] = None,
     return {"run_id": p["run_id"], "location": loc, "units": "mm",
             "threshold_mm": threshold, "interval_total_mm": round(total, 3),
             "intervals": rows, "freshness": freshness(p)}
+
+
+@app.get("/api/point")
+def point_forecast(latitude: float = Query(..., ge=6, le=37),
+                   longitude: float = Query(..., ge=67, le=98),
+                   run_id: Optional[str] = None,
+                   threshold_mm: float = Query(10, ge=0, le=500)):
+    """Return one actual grid-cell series, snapped from a clicked map coordinate."""
+    if not isfinite(latitude) or not isfinite(longitude):
+        raise HTTPException(422, "Coordinates must be finite numbers")
+    p = load_forecast(run_id)
+    bounds = p.get("bounds")
+    if not isinstance(bounds, dict) or any(key not in bounds for key in ("south", "north", "west", "east")):
+        raise HTTPException(503, "Forecast coverage bounds are unavailable")
+    try:
+        south, north, west, east = (float(bounds[key]) for key in ("south", "north", "west", "east"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(503, "Forecast coverage bounds are invalid") from exc
+    if not (south <= latitude <= north and west <= longitude <= east):
+        raise HTTPException(422, "Coordinate is outside the selected forecast coverage")
+    lats, lons = p.get("latitudes", []), p.get("longitudes", [])
+    if not lats or len(lats) != len(lons):
+        raise HTTPException(503, "Forecast grid coordinates are unavailable")
+    try:
+        index = nearest_index(lats, lons, latitude, longitude)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(503, "Forecast grid coordinates are invalid") from exc
+    threshold = threshold_value(threshold_mm)
+    rows, total = [], 0.0
+    now = datetime.now(timezone.utc)
+    for interval in p["intervals"]:
+        values = interval.get("rainfall_mm", [])
+        if index >= len(values):
+            raise HTTPException(503, "Forecast grid and interval values are inconsistent")
+        amount = values[index]
+        if not isinstance(amount, (int, float)) or not isfinite(amount) or amount < 0:
+            raise HTTPException(503, "Forecast interval contains an invalid grid value")
+        total += amount
+        rows.append({"start_step": interval["start_step"], "end_step": interval["end_step"],
+                     "start_time": interval["start_time"], "end_time": interval["end_time"],
+                     "phase": interval_phase(interval, now), "rainfall_mm": round(amount, 3),
+                     "cumulative_mm": round(total, 3), "threshold_crossed": amount >= threshold,
+                     "rounding_tolerance_mm": interval.get("rounding_tolerance_mm", 0)})
+    return {"run_id": p["run_id"], "initialization": p["initialization"],
+            "retrieved_at": p["retrieved_at"], "model": p.get("model"),
+            "source_units": (p.get("grib_metadata") or [{}])[0].get("units"), "units": "mm",
+            "threshold_mm": threshold,
+            "selection": {"clicked_latitude": latitude, "clicked_longitude": longitude,
+                          "grid_latitude": lats[index], "grid_longitude": lons[index],
+                          "grid_index": index, "method": "nearest actual ECMWF grid point"},
+            "interval_total_mm": round(total, 3), "intervals": rows,
+            "freshness": freshness(p)}
 
 
 @app.get("/api/spatial")

@@ -162,6 +162,53 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(result["intervals"][1]["threshold_crossed"])
         self.assertEqual(result["intervals"][1]["cumulative_mm"], 13)
 
+    def test_point_query_snaps_to_nearest_grid_and_keeps_clicked_coordinate(self):
+        result = self.client.get("/api/point?latitude=13.12&longitude=77.74&threshold_mm=2").json()
+        self.assertEqual(result["run_id"], self.run_id)
+        self.assertEqual(result["units"], "mm")
+        self.assertAlmostEqual(result["selection"]["clicked_latitude"], 13.12)
+        self.assertEqual(result["selection"]["grid_latitude"], 13.0)
+        self.assertEqual(result["selection"]["grid_longitude"], 77.75)
+        self.assertEqual(result["intervals"][0]["rainfall_mm"], 2.0)
+        self.assertTrue(result["intervals"][0]["threshold_crossed"])
+
+    def test_point_query_threshold_includes_equality_and_bbox_edges(self):
+        result = self.client.get("/api/point?latitude=13.25&longitude=77.5&threshold_mm=3").json()
+        self.assertTrue(result["intervals"][0]["threshold_crossed"])
+        self.assertEqual(result["threshold_mm"], 3)
+        edge = self.client.get("/api/point?latitude=6&longitude=67")
+        self.assertEqual(edge.status_code, 200)
+        self.assertEqual(self.client.get("/api/point?latitude=37&longitude=98").status_code, 200)
+        self.assertEqual(self.client.get("/api/point?latitude=5.99&longitude=67").status_code, 422)
+        self.assertEqual(self.client.get("/api/point?latitude=13&longitude=98.01").status_code, 422)
+        self.assertEqual(self.client.get("/api/point?latitude=nan&longitude=80").status_code, 422)
+
+    def test_point_query_returns_full_run_and_rejects_mismatched_run(self):
+        result = self.client.get("/api/point?latitude=13&longitude=77.5").json()
+        self.assertEqual(len(result["intervals"]), 2)
+        self.assertTrue(all(row["start_time"] and row["end_time"] for row in result["intervals"]))
+        self.assertEqual(self.client.get("/api/point?latitude=13&longitude=77.5&run_id=other").status_code, 503)
+
+        payload = json.loads((api.DATA / "latest.json").read_text())
+        intervals = []
+        for end_step in range(3, 49, 3):
+            start_step = end_step - 3
+            start_time = self.initialization + timedelta(hours=start_step)
+            end_time = self.initialization + timedelta(hours=end_step)
+            intervals.append({"start_step": start_step, "end_step": end_step,
+                              "start_time": start_time.isoformat(), "end_time": end_time.isoformat(),
+                              "rainfall_mm": [float(end_step)] * 4, "rounding_tolerance_mm": 0.01})
+        payload["intervals"] = intervals
+        (api.DATA / "latest.json").write_text(json.dumps(payload))
+        result = self.client.get("/api/point?latitude=13&longitude=77.5").json()
+        self.assertEqual(len(result["intervals"]), 16)
+        self.assertEqual(result["intervals"][-1]["end_step"], 48)
+        for row in result["intervals"]:
+            self.assertEqual(datetime.fromisoformat(row["start_time"]),
+                             self.initialization + timedelta(hours=row["start_step"]))
+            self.assertEqual(datetime.fromisoformat(row["end_time"]),
+                             self.initialization + timedelta(hours=row["end_step"]))
+
     def test_spatial_geojson_shape(self):
         result = self.client.get("/api/spatial?end_step=3").json()
         self.assertEqual(result["type"], "FeatureCollection")

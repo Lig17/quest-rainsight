@@ -56,6 +56,7 @@ and includes frozen precipitation.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m unittest discover -s tests -v
+node tests/test_frontend_race.js
 .venv/bin/uvicorn rainsight.api:app --host 127.0.0.1 --port 8000
 ```
 
@@ -97,13 +98,20 @@ A sleeping Free service may take about a minute to answer its first request.
 - `GET /api/locations`
 - `GET /api/timeline?threshold_mm=10`
 - `GET /api/location/{location_id}?threshold_mm=10`
+- `GET /api/point?latitude=13.08&longitude=80.27&threshold_mm=10`
 - `GET /api/spatial?end_step=3`
 - `GET /api/provenance`
 
 The responsive interface has an interval map, configurable threshold, location
-analysis, comparison chart, and source-field provenance. API responses include
-the run and freshness where relevant. Deterministic values are rainfall amounts,
-never probabilities or calibrated uncertainty estimates.
+analysis, comparison chart, and source-field provenance. Click the map or enter
+coordinates within the displayed coverage to query one nearest actual ECMWF
+grid point. Its selected 3-hour amount, 16-interval timeline, threshold matches,
+snapped 0.25-degree coordinates, and run explanation stay linked as the user
+changes intervals. Map circles remain approximately 0.5-degree aggregates and
+are labeled separately from the single-cell point query. The point API returns
+one cell rather than the full spatial field. API responses include the run and
+freshness where relevant. Deterministic values are rainfall amounts, never
+probabilities or calibrated uncertainty estimates.
 
 ## Source and licence
 

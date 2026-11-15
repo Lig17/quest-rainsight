@@ -46,12 +46,13 @@
         <div class="map-panel">
           <div class="map-topline"><div><span class="panel-kicker">SPATIAL FIELD</span><h3 id="map-interval-title">Loading interval…</h3></div><div class="map-actions"><button id="reset-map" class="icon-button" type="button" aria-label="Reset map view" title="Reset map view">◎</button></div></div>
           <div id="map" role="application" aria-label="Interactive map showing forecast precipitation across India"><div class="map-loading" id="map-loading">Loading forecast map…</div></div>
-          <div class="map-footer"><div class="legend-title">INTERVAL PRECIPITATION</div><div class="legend-row"><span>0</span><div class="legend-gradient"></div><span>25+ mm</span></div><div class="map-footnote">Each marker averages nearby 0.25° grid cells. Select a marker to inspect its amount.</div></div>
+          <div class="map-footer"><div class="legend-title">INTERVAL PRECIPITATION</div><div class="legend-row"><span>0</span><div class="legend-gradient"></div><span>25+ mm</span></div><div class="map-footnote" id="map-hint">Map markers average nearby grid cells. Click any point in the India coverage to inspect its nearest model grid cell.</div><form class="point-query" id="point-query"><label for="point-latitude">Latitude<input id="point-latitude" type="number" min="6" max="37" step="any" inputmode="decimal" placeholder="13.08" required></label><label for="point-longitude">Longitude<input id="point-longitude" type="number" min="67" max="98" step="any" inputmode="decimal" placeholder="80.27" required></label><button type="submit" class="point-query-button">Inspect point</button></form></div>
         </div>
         <aside class="inspector">
           <div class="panel-kicker">LOCATION DETAIL</div>
           <label class="select-label" for="city-select">Choose a supported location</label>
           <select id="city-select" class="city-select" aria-label="Choose a supported Indian location"></select>
+          <div class="point-selection" id="point-selection" hidden aria-live="polite"><span id="point-coordinates"></span><button id="return-city" type="button">Return to <span id="return-city-name">city preset</span></button></div>
           <div class="rain-readout"><div class="readout-label" id="selected-interval-label">SELECTED INTERVAL</div><div class="readout-number"><span id="city-amount">—</span><small>mm</small></div><div class="readout-sub" id="city-cumulative">— mm across the forecast</div></div>
           <div class="divider"></div>
           <div class="threshold-head"><div><div class="panel-kicker">INTERVAL THRESHOLD</div><div class="threshold-value"><span id="threshold-value">10</span> <small>mm</small></div></div><span class="threshold-icon">⌁</span></div>
@@ -59,6 +60,7 @@
           <p class="threshold-copy" id="threshold-copy">Select an interval to see whether it meets your threshold.</p>
           <div class="divider"></div>
           <div class="panel-kicker">FORECAST RUN</div><div class="run-detail" id="run-detail">Loading provenance…</div>
+          <details class="point-explanation"><summary>Explain this forecast</summary><p id="point-explanation-copy">A location estimate uses the nearest 0.25° grid point and represents one three-hour interval.</p></details>
         </aside>
       </div>
       <div class="timeline-card">

@@ -485,3 +485,62 @@ session JSONL. The transcript must remain untouched.
   displayed interval label all remained Mumbai; the map retained 3,969 real
   forecast cells. The test delayed a real response only; it did not alter or
   synthesize precipitation values.
+
+
+## 2026-11-15 — Rainfall Decision Lens
+
+- Started from a clean `main` at `24514c7` without changing the existing
+  `.rainsight-git` history. The selected improvement is a single map-to-time
+  interaction: selecting a location returns one nearest real grid cell and
+  connects its interval series to the existing inspector and timeline. The
+  alternative of transferring the full grid to the browser was rejected; the
+  existing validated processed cache already supports a small point query.
+- Added `GET /api/point` with coordinates checked against the selected cache's
+  India bounds, nearest-grid selection using the existing longitude correction,
+  one run ID, 3-hour timestamps, interval millimetres, `>=` threshold flags,
+  source units, initialization, retrieval time, and freshness. A response
+  contains one series, not the 15,625 by 16 spatial array. Existing map circles
+  remain explicitly labeled aggregates.
+- The frontend now supports map clicks and keyboard-friendly latitude and
+  longitude entry, shows clicked and snapped coordinates, retains a highlighted
+  grid marker, and links the point series to timeline selection, threshold text,
+  and an expandable processing explanation. The eight city presets and
+  city-to-city comparison remain available. A monotonically increasing request
+  token discards late point or city responses after a newer selection.
+- The first browser run found coordinate fields rejecting valid three-decimal
+  values because their HTML step was `0.01`; changed them to accept arbitrary
+  precision. A later screenshot found mobile horizontal overflow from the
+  method section's intrinsic grid minimum. Constrained that grid and its
+  children to the available width. Both observed defects were fixed before the
+  local release gate.
+- Python suite: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest
+  discover -s tests -v` ran 22 tests and passed. New point tests cover nearest
+  cell, click-coordinate preservation, exact-threshold equality, inclusive
+  coverage edges, out-of-bounds and nonfinite coordinates, run ID, 16 interval
+  timestamps, and selected-cell values. `node tests/test_frontend_race.js`
+  passed with deliberately reversed request completion and a mobile grid CSS
+  regression guard. JavaScript syntax checks and `git diff --check` passed.
+- On bundled real run `20261115T0000Z`, the Chennai point request snapped
+  `(13.0827, 80.2707)` to `(13.00, 80.25)` and all 16 values matched the
+  existing Chennai endpoint. The real cache contained `tp` in metres; the
+  endpoint reports millimetres with the same initialization and interval
+  boundaries. This was an internal processed-cache cross-check, not a new
+  independent raw-GRIB decode.
+- Browser checks used the local app and bundled forecast. At CSS viewport
+  width 390 px, `innerWidth` was 390, while `documentElement.clientWidth` and
+  `scrollWidth` both measured 375 px because of the browser's vertical
+  scrollbar; horizontal overflow was zero. At desktop `innerWidth` 1440 px,
+  page width matched its 1425 px client width. Map click, coordinate entry,
+  nearest-grid display, 16 timeline entries, interval selection, return to
+  Chennai, Mumbai-vs-Chennai comparison, and the explanation were observed.
+  The tested point's selected amount was 0 mm; no synthetic value was used.
+- `docker build -t rainsight:decision-lens .` completed. Running that image
+  locally returned homepage HTTP 200, health available on the bundled real run
+  with 10 upcoming intervals, and a 16-interval `/api/point` response. During
+  this local check the bundled cache age was about 8.2 hours and run age about
+  17.2 hours; freshness was `stale=false`, horizon not expired. The container
+  check disabled auto-refresh and does not verify ECMWF availability.
+- At this log entry, sprint changes are local and the public deployment still
+  points to the prior verified commit. Remote deployment, public browser
+  behavior, and current ECMWF freshness must be checked after publication
+  before describing this interaction as live.
