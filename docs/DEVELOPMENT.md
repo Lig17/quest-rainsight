@@ -462,3 +462,26 @@ session JSONL. The transcript must remain untouched.
   restart and the live refresh then advanced it. Refresh failure preservation
   is also covered by the offline regression test. Render Free refresh remains
   best-effort and local storage remains ephemeral.
+
+
+## 2026-11-15 — out-of-order frontend response guard
+
+- The public browser review found a timing-sensitive city assertion after a
+  timeline click. A focused city-only repeat passed, but code inspection found
+  that timeline selection and city selection can request location data
+  concurrently. A late response could overwrite the data for the new selection
+  and leave the map, timeline, and comparison views vulnerable to the same
+  response-order issue.
+- Frontend requests now capture their selected city, threshold, run ID, or map
+  step before fetching, then discard the result if that selection changed.
+  Comparison results are also accepted only if both selected cities and run
+  still match. Changing a city clears the prior amount and displays a loading
+  state until the new city response arrives.
+- Re-ran `.venv/bin/python -m unittest discover -s tests -v`: all 19 tests
+  passed. `node --check web/app.js` and `git diff --check` passed. A local
+  Chromium regression used the genuine bundled Nov 15 00 UTC snapshot and
+  delayed one real Chennai response by 2.5 s while switching the city to
+  Mumbai. After the delayed response returned, the selected city, API data, and
+  displayed interval label all remained Mumbai; the map retained 3,969 real
+  forecast cells. The test delayed a real response only; it did not alter or
+  synthesize precipitation values.

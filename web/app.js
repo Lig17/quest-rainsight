@@ -61,19 +61,49 @@ function renderMap(features){
     state.layer.addLayer(marker);
   }
 }
-async function loadCity(){state.city=await api(`/api/location/${state.cityId}?threshold_mm=${state.threshold}`);setFreshness(state.city.freshness);renderCity();renderTimeline()}
-async function loadTimeline(){state.timeline=await api(`/api/timeline?threshold_mm=${state.threshold}`);const selectable=state.timeline.intervals.filter(x=>x.phase!=='elapsed');if(!selectable.length)throw new Error('Forecast horizon has ended; waiting for a current ECMWF run.');if(state.selectedStep==null||!selectable.some(x=>x.end_step===state.selectedStep))state.selectedStep=(selectable.find(x=>x.phase==='upcoming')||selectable[0]).end_step;$('#stat-horizon').textContent=`${state.timeline.intervals.length*3} h`;$('#run-init').textContent=fullDate(state.timeline.initialization);setFreshness(state.timeline.freshness);renderTimeline()}
+async function loadCity(){
+  const cityId=state.cityId,threshold=state.threshold,runId=state.runId;
+  const data=await api(`/api/location/${cityId}?threshold_mm=${threshold}`);
+  if(cityId!==state.cityId||threshold!==state.threshold||data.run_id!==runId)return;
+  state.city=data;setFreshness(data.freshness);renderCity();renderTimeline();
+}
+async function loadTimeline(){
+  const threshold=state.threshold,runId=state.runId;
+  const data=await api(`/api/timeline?threshold_mm=${threshold}`);
+  if(threshold!==state.threshold||data.run_id!==runId)return;
+  state.timeline=data;
+  const selectable=data.intervals.filter(x=>x.phase!=='elapsed');
+  if(!selectable.length)throw new Error('Forecast horizon has ended; waiting for a current ECMWF run.');
+  if(state.selectedStep==null||!selectable.some(x=>x.end_step===state.selectedStep))state.selectedStep=(selectable.find(x=>x.phase==='upcoming')||selectable[0]).end_step;
+  $('#stat-horizon').textContent=`${data.intervals.length*3} h`;$('#run-init').textContent=fullDate(data.initialization);setFreshness(data.freshness);renderTimeline();
+}
 async function loadSpatial(){
-  const data=await api(`/api/spatial?end_step=${state.selectedStep}`), interval=$('#map-interval-title');
+  const endStep=state.selectedStep,runId=state.runId;
+  const data=await api(`/api/spatial?end_step=${endStep}`);
+  if(endStep!==state.selectedStep||data.end_step!==endStep||data.run_id!==runId)return;
+  const interval=$('#map-interval-title');
   interval.dataset.start=data.start_time; interval.dataset.end=data.end_time;
   interval.textContent=`${localDateTime(data.start_time)}–${localDateTime(data.end_time)} IST`;
   renderMap(data.features);
 }
 async function selectStep(step){state.selectedStep=step;renderTimeline();try{await Promise.all([loadCity(),loadSpatial()])}catch(error){showError(error.message)}}
-async function setCity(cityId){state.cityId=cityId;try{await loadCity()}catch(error){showError(error.message)}}
+async function setCity(cityId){
+  state.cityId=cityId;state.city=null;renderTimeline();
+  $('#city-amount').textContent='—';$('#selected-interval-label').textContent=`Loading ${currentCity()?.name||'location'} forecast…`;
+  $('#city-cumulative').textContent='Loading forecast data…';$('#threshold-copy').textContent='Updating the selected location forecast…';
+  try{await loadCity()}catch(error){showError(error.message)}
+}
 async function loadProvenance(){const data=await api('/api/provenance');renderRunDetail(data);$('#provenance-json').textContent=JSON.stringify(data,null,2)}
 function drawComparison(){const canvas=$('#compare-chart'),ctx=canvas.getContext('2d'),rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;if(!rect.width)return;canvas.width=rect.width*dpr;canvas.height=rect.height*dpr;ctx.scale(dpr,dpr);const w=rect.width,h=rect.height,p={l:39,r:14,t:12,b:32};const a=state.compareData?.a,b=state.compareData?.b;if(!a||!b)return;const values=[...a.intervals.map(x=>x.rainfall_mm),...b.intervals.map(x=>x.rainfall_mm)],max=Math.max(1,...values),xCount=a.intervals.length;ctx.font='9px DM Mono, monospace';ctx.textBaseline='middle';ctx.strokeStyle='#edf0f3';ctx.fillStyle='#8792a0';ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=p.t+(h-p.t-p.b)*i/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.textAlign='right';ctx.fillText(number(max*(1-i/4),1),p.l-7,y)}ctx.strokeStyle='#d9dfe5';ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();for(let i=0;i<xCount;i++){const x=p.l+(w-p.l-p.r)*(i/(Math.max(1,xCount-1)));if(i%Math.max(1,Math.ceil(xCount/8))===0||i===xCount-1){ctx.fillStyle='#8994a2';ctx.textAlign='center';ctx.fillText(dateTime(a.intervals[i].end_time),x,h-p.b+17)}}[[a,'#16877e'],[b,'#d58c42']].forEach(([series,color])=>{ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();series.intervals.forEach((point,i)=>{const x=p.l+(w-p.l-p.r)*(i/(Math.max(1,xCount-1))),y=p.t+(h-p.t-p.b)*(1-point.rainfall_mm/max);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();series.intervals.forEach((point,i)=>{const x=p.l+(w-p.l-p.r)*(i/(Math.max(1,xCount-1))),y=p.t+(h-p.t-p.b)*(1-point.rainfall_mm/max);ctx.beginPath();ctx.arc(x,y,2.4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill()})})}
-async function loadComparison(){try{const [a,b]=await Promise.all([api(`/api/location/${state.compareA}`),api(`/api/location/${state.compareB}`)]);state.compareData={a,b};$('#compare-a-name').textContent=a.location.name;$('#compare-b-name').textContent=b.location.name;$('#compare-a-total').textContent=`${number(a.interval_total_mm,2)} mm`;$('#compare-b-total').textContent=`${number(b.interval_total_mm,2)} mm`;drawComparison()}catch(error){showError(error.message)}}
+async function loadComparison(){
+  const compareA=state.compareA,compareB=state.compareB,runId=state.runId;
+  try{
+    const [a,b]=await Promise.all([api(`/api/location/${compareA}`),api(`/api/location/${compareB}`)]);
+    if(compareA!==state.compareA||compareB!==state.compareB||a.run_id!==runId||b.run_id!==runId)return;
+    state.compareData={a,b};$('#compare-a-name').textContent=a.location.name;$('#compare-b-name').textContent=b.location.name;
+    $('#compare-a-total').textContent=`${number(a.interval_total_mm,2)} mm`;$('#compare-b-total').textContent=`${number(b.interval_total_mm,2)} mm`;drawComparison();
+  }catch(error){showError(error.message)}
+}
 async function waitForForecast(){
   let lastError=new Error('Checking the current ECMWF forecast');
   for(let attempt=0;attempt<80;attempt++){
